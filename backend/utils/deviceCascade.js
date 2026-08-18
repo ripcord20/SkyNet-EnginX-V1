@@ -187,12 +187,97 @@ async function unlinkDevice(sequelize, deviceId, transaction) {
   }
 }
 
+/**
+ * Hapus device meski masih ada FK yang tidak kita kenal.
+ * SET FOREIGN_KEY_CHECKS bersifat session — selalu dikembalikan ke 1
+ * di `finally` supaya koneksi pool tidak "bocor" FK checks mati.
+ */
+async function forceDeleteDevice(sequelize, deviceId, transaction) {
+  const id = parseInt(deviceId, 10);
+  if (!id) return;
+
+  try {
+    await unlinkDevice(sequelize, id, transaction);
+  } catch (_) { /* lanjut pakai FK_CHECKS=0 */ }
+
+  await sequelize.query('SET FOREIGN_KEY_CHECKS = 0', { transaction });
+  try {
+    for (const row of EXTRA_SET_NULL) {
+      await sequelize.query(
+        `UPDATE ${ident(row.table)} SET ${ident(row.column)} = NULL WHERE ${ident(row.column)} = ?`,
+        { replacements: [id], transaction }
+      ).catch(() => {});
+    }
+    for (const row of EXTRA_DELETE) {
+      await sequelize.query(
+        `DELETE FROM ${ident(row.table)} WHERE ${ident(row.column)} = ?`,
+        { replacements: [id], transaction }
+      ).catch(() => {});
+    }
+    await sequelize.query(
+      'DELETE FROM `devices` WHERE id = ?',
+      { replacements: [id], transaction }
+    );
+  } finally {
+    await sequelize.query('SET FOREIGN_KEY_CHECKS = 1', { transaction });
+  }
+}
+
+function statusRank(device) {
+  const st = String(device && device.status || '').toLowerCase();
+  if (st === 'online') return 3;
+  if (st === 'warning') return 2;
+  if (st === 'offline') return 1;
+  return 0;
+}
+
+/** Pilih 1 device yang dipertahankan saat IP duplikat. */
+function pickDeviceToKeep(devices) {
+  const list = Array.isArray(devices) ? devices.slice() : [];
+  if (!list.length) return null;
+  list.sort((a, b) => {
+    const ra = statusRank(a);
+    const rb = statusRank(b);
+    if (rb !== ra) return rb - ra;
+    const ta = new Date(a.last_polled || 0).getTime();
+    const tb = new Date(b.last_polled || 0).getTime();
+    if (tb !== ta) return tb - ta;
+    return (b.id || 0) - (a.id || 0);
+  });
+  return list[0];
+}
+
+function groupDuplicatesByIp(devices) {
+  const map = new Map();
+  for (const d of devices || []) {
+    const ip = String(d && d.ip_address || '').trim();
+    if (!ip) continue;
+    if (!map.has(ip)) map.set(ip, []);
+    map.get(ip).push(d);
+  }
+  const groups = [];
+  for (const [ip, list] of map) {
+    if (list.length < 2) continue;
+    const keep = pickDeviceToKeep(list);
+    groups.push({
+      ip,
+      keep,
+      remove: list.filter((d) => d.id !== keep.id),
+    });
+  }
+  return groups;
+}
+
 module.exports = {
   ident,
   KEEP_TABLES,
+  EXTRA_DELETE,
   parseFkTableFromError,
   listDeviceForeignKeys,
   desiredDeleteRule,
   ensureDeviceFkRules,
   unlinkDevice,
+  forceDeleteDevice,
+  pickDeviceToKeep,
+  groupDuplicatesByIp,
 };

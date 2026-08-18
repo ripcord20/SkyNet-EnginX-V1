@@ -2,7 +2,7 @@ const { Device, DeviceLog, TrafficData, sequelize } = require('../models');
 const { Op } = require('sequelize');
 const { paginateResponse } = require('../utils/helpers');
 const { parseCpuPercent } = require('../utils/mikrotikResource');
-const { unlinkDevice, parseFkTableFromError } = require('../utils/deviceCascade');
+const { forceDeleteDevice, groupDuplicatesByIp } = require('../utils/deviceCascade');
 const net = require('net');
 const logger = require('../utils/logger');
 
@@ -155,30 +155,9 @@ class DeviceController {
         if (snmp) snmp.stopDevice(device.id);
       } catch (e) {}
 
-      // Device Management adalah sumber kebenaran: hapus device kapan saja,
-      // data modul lain (Network Health, log, NMS, isolir, …) ikut dilepas.
-      await unlinkDevice(sequelize, device.id, t);
-
-      const tryDestroy = async () => device.destroy({ transaction: t });
-      try {
-        await tryDestroy();
-      } catch (err) {
-        if (!String(err.message).match(/foreign key constraint/i)) throw err;
-        const table = parseFkTableFromError(err.message);
-        logger.warn(`[Device.destroy] FK sisa di ${table || '?'}, retry unlink`);
-        if (table && /^[A-Za-z0-9_]+$/.test(table)) {
-          await sequelize.query(
-            `DELETE FROM \`${table}\` WHERE device_id = ?`,
-            { replacements: [device.id], transaction: t }
-          ).catch(() => {});
-          await sequelize.query(
-            `DELETE FROM \`${table}\` WHERE router_id = ?`,
-            { replacements: [device.id], transaction: t }
-          ).catch(() => {});
-        }
-        await unlinkDevice(sequelize, device.id, t);
-        await tryDestroy();
-      }
+      // Device Management adalah sumber kebenaran: hapus kapan saja,
+      // termasuk saat Kesehatan Jaringan / modul lain masih mereferensi baris ini.
+      await forceDeleteDevice(sequelize, device.id, t);
 
       await t.commit();
       res.json({ success: true, message: 'Device dihapus. Data terkait di modul lain ikut dibersihkan.' });
@@ -189,6 +168,54 @@ class DeviceController {
         success: false,
         message: 'Gagal menghapus device: ' + (error.message || 'error')
       });
+    }
+  }
+
+  // POST /api/devices/purge-duplicates
+  // Satu IP = satu device. Sisakan yang online / terbaru, hapus sisanya.
+  async purgeDuplicates(req, res) {
+    try {
+      const rows = await Device.findAll({ order: [['id', 'ASC']] });
+      const groups = groupDuplicatesByIp(rows);
+      if (!groups.length) {
+        return res.json({ success: true, message: 'Tidak ada device duplikat.', data: { removed: [] } });
+      }
+
+      const removed = [];
+      for (const g of groups) {
+        for (const d of g.remove) {
+          const t = await sequelize.transaction();
+          try {
+            try {
+              const SNMPService = require('../services/SNMPService');
+              const snmp = SNMPService.getInstance();
+              if (snmp) snmp.stopDevice(d.id);
+            } catch (_) {}
+            await forceDeleteDevice(sequelize, d.id, t);
+            await t.commit();
+            removed.push({ id: d.id, name: d.name, ip_address: d.ip_address, kept_id: g.keep.id });
+          } catch (e) {
+            try { await t.rollback(); } catch (_) {}
+            logger.error(`[Device.purgeDuplicates] gagal hapus #${d.id}: ${e.message}`);
+            return res.status(500).json({
+              success: false,
+              message: `Gagal menghapus duplikat ${d.name} (${d.ip_address}): ${e.message}`,
+              data: { removed }
+            });
+          }
+        }
+      }
+
+      res.json({
+        success: true,
+        message: removed.length
+          ? `${removed.length} device duplikat dihapus. Yang online/terbaru tetap ada.`
+          : 'Tidak ada device duplikat.',
+        data: { removed }
+      });
+    } catch (error) {
+      logger.error(`[Device.purgeDuplicates] ${error.message}`);
+      res.status(500).json({ success: false, message: error.message });
     }
   }
 
@@ -406,10 +433,8 @@ class DeviceController {
         errors: []
       };
 
-      // Hanya coba MikroTik API untuk tipe router/olt yang pakai API
-      const canUseMt = ['router', 'olt'].includes(device.type)
-                    && ['api', 'both'].includes(device.monitoring_type)
-                    && device.api_username;
+      // Hanya coba MikroTik API untuk router/OLT yang punya username REST/API
+      const canUseMt = ['router', 'olt'].includes(device.type) && device.api_username;
 
       if (canUseMt) {
         try {

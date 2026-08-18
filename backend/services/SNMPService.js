@@ -22,11 +22,12 @@ class SNMPService {
   // Start monitoring all active devices
   async startAll() {
     try {
-      const devices = await Device.findAll({
-        where: { is_active: true, monitoring_type: ['snmp', 'both'] }
-      });
-      logger.info(`Starting SNMP monitoring for ${devices.length} devices`);
-      for (const device of devices) {
+      const devices = await Device.findAll({ where: { is_active: true } });
+      const watch = devices.filter((d) =>
+        ['snmp', 'both'].includes(d.monitoring_type) || this.canUseMikrotikApi(d)
+      );
+      logger.info(`Starting device monitoring for ${watch.length} devices`);
+      for (const device of watch) {
         this.startDevice(device);
       }
     } catch (error) {
@@ -41,7 +42,7 @@ class SNMPService {
     }
 
     const interval = (device.poll_interval || 60) * 1000;
-    logger.info(`Starting SNMP poll for ${device.name} (${device.ip_address}) every ${device.poll_interval}s`);
+    logger.info(`Starting poll for ${device.name} (${device.ip_address}) every ${device.poll_interval || 60}s`);
 
     // Initial poll
     this.pollDevice(device);
@@ -67,15 +68,102 @@ class SNMPService {
     logger.info('Stopped all SNMP monitoring');
   }
 
-  async pollDevice(device) {
-    if (!snmp) return;
+  canUseMikrotikApi(device) {
+    return !!(device && device.api_username
+      && ['router', 'olt'].includes(device.type));
+  }
 
+  async pollViaMikrotikApi(device) {
+    const { MikrotikService } = require('./MikrotikService');
+    const mt = new MikrotikService({
+      host: device.ip_address,
+      port: device.api_port || 80,
+      username: device.api_username,
+      password: device.api_password || '',
+      api_protocol: device.api_protocol || null,
+      timeout: 8000
+    });
+    const res = await mt.getSystemResource();
+    if (!res) throw new Error('empty /system/resource');
+
+    const cpu = parseCpuPercent(res.cpuLoad);
+    const mem = res.totalMemory > 0
+      ? Math.round(((res.totalMemory - res.freeMemory) / res.totalMemory) * 100)
+      : 0;
+    const prevStatus = device.status;
+
+    await Device.update({
+      status: DEVICE_STATUS.ONLINE,
+      cpu_load: cpu,
+      memory_usage: mem,
+      uptime: res.uptime || '',
+      firmware: res.version || device.firmware,
+      last_polled: new Date()
+    }, { where: { id: device.id } });
+    device.status = DEVICE_STATUS.ONLINE;
+
+    try {
+      await DeviceLog.create({
+        device_id: device.id,
+        cpu_load: cpu,
+        memory_usage: mem,
+        uptime: res.uptime || '',
+        status: cpu > 90 ? 'warning' : 'online',
+        polled_at: new Date()
+      });
+    } catch (logErr) { /* device mungkin sudah dihapus */ }
+
+    if (this.io) {
+      this.io.to(`device_${device.id}`).emit('device:update', {
+        device_id: device.id,
+        status: 'online',
+        cpu_load: cpu,
+        memory_usage: mem,
+        uptime: res.uptime,
+        timestamp: new Date()
+      });
+      this.io.emit('monitoring:update', {
+        device_id: device.id,
+        name: device.name,
+        status: 'online',
+        cpu_load: cpu,
+        memory_usage: mem
+      });
+    }
+
+    if (prevStatus === DEVICE_STATUS.OFFLINE) {
+      await this.createAlert(device, 'device_up', 'info',
+        `Device ${device.name} is back online`);
+    }
+    if (cpu > 90) {
+      await this.createAlert(device, 'cpu_overload', 'warning',
+        `CPU load on ${device.name}: ${cpu}%`);
+    }
+  }
+
+  async pollDevice(device) {
     // Cek device masih ada di DB sebelum poll
-    const exists = await Device.findByPk(device.id, { attributes: ['id'] });
+    const exists = await Device.findByPk(device.id);
     if (!exists) {
       this.stopDevice(device.id);
       return;
     }
+    // Pakai baris terbaru (credential API mungkin baru diisi).
+    device = exists;
+
+    // MikroTik: CPU/RAM dari REST (/system/resource) — sama dengan WinBox.
+    // Jangan fallback SNMP untuk metrik: OID lama (mtxrHealth.14) tertulis 1400
+    // lalu diklem jadi 100% CPU / 0% RAM.
+    if (this.canUseMikrotikApi(device)) {
+      try {
+        await this.pollViaMikrotikApi(device);
+      } catch (e) {
+        logger.warn(`[poll] REST ${device.name} gagal: ${e.message}`);
+      }
+      return;
+    }
+
+    if (!snmp) return;
 
     const session = snmp.createSession(device.ip_address, device.snmp_community || 'public', {
       port: device.snmp_port || 161,
