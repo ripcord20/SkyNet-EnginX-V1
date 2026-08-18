@@ -191,6 +191,7 @@ router.get('/monitoring/ippool', authenticate, blockFinanceArea, (req, res) => {
 });
 
 router.get('/monitoring/radius', authenticate, blockFinanceArea, (req, res) => {
+  res.set('Cache-Control', 'no-store');
   res.render('pages/radius', { title: 'RADIUS AAA', user: req.user, active: 'radius' });
 });
 
