@@ -81,67 +81,48 @@
 
     <div class="nav-section">
       <span class="nav-section-title">MONITORING</span>
-      <a href="/nms" class="nav-item <%= active === 'nms' ? 'active' : '' %>">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
-        <span>NMS Interface</span>
-      </a>
-      <a href="/monitoring/traffic" class="nav-item <%= active === 'traffic' ? 'active' : '' %>">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg>
-        <span>Traffic Interface</span>
-      </a>
-      <a href="/monitoring/pppoe" class="nav-item <%= active === 'pppoe' ? 'active' : '' %>">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
-        <span>PPPoE Sessions</span>
-        <span class="nav-badge blue" id="pppoe-count" style="display:none">0</span>
-      </a>
-      <a href="/monitoring/wireguard" class="nav-item <%= active === 'wireguard' ? 'active' : '' %>">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
-        <span>WireGuard</span>
-      </a>
-      <a href="/monitoring/nas" class="nav-item <%= active === 'nas' ? 'active' : '' %>">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="7" rx="2"/><rect x="2" y="14" width="20" height="7" rx="2"/><line x1="6" y1="6.5" x2="6.01" y2="6.5"/><line x1="6" y1="17.5" x2="6.01" y2="17.5"/></svg>
-        <span>NAS RADIUS</span>
-      </a>
-      <a href="/monitoring/queue" class="nav-item <%= active === 'queue' ? 'active' : '' %>">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16,3 21,3 21,8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21,16 21,21 16,21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
-        <span>Simple Queue</span>
-      </a>
-      <a href="/monitoring/ippool" class="nav-item <%= active === 'ippool' ? 'active' : '' %>">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
-        <span>IP Pool</span>
-      </a>
-      <a href="/monitoring/firewall" class="nav-item <%= active === 'firewall' ? 'active' : '' %>">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        <span>Firewall</span>
-      </a>
-      <a href="/monitoring/olt-management" class="nav-item <%= active === 'olt-management' ? 'active' : '' %>">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="7" rx="2"/><rect x="2" y="14" width="20" height="7" rx="2"/><line x1="6" y1="6.5" x2="6.01" y2="6.5"/><line x1="6" y1="17.5" x2="6.01" y2="17.5"/><path d="M16 6.5h2M16 17.5h2"/></svg>
-        <span>OLT Management</span>
-      </a>
-      <a href="/genieacs" class="nav-item <%= active === 'genieacs' ? 'active' : '' %>">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><line x1="6" y1="10" x2="6.01" y2="10"/><line x1="10" y1="10" x2="18" y2="10"/></svg>
-        <span>ONT Management</span>
-      </a>
-      <a href="/monitoring/ping" class="nav-item <%= active === 'ping' ? 'active' : '' %>">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0114.08 0"/><path d="M1.42 9a16 16 0 0121.16 0"/><path d="M8.53 16.11a6 6 0 016.95 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/></svg>
-        <span>Host Monitor</span>
-      </a>
-      <a href="/devices" class="nav-item <%= active === 'devices' ? 'active' : '' %>">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><line x1="3" y1="16" x2="21" y2="16"/><line x1="8" y1="20" x2="16" y2="20"/></svg>
-        <span>Device Management</span>
-      </a>
-      <a href="/monitoring/device-monitor" class="nav-item <%= active === 'device-monitor' ? 'active' : '' %>">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-        <span>Device Monitor</span>
-      </a>
-      <a href="/monitoring/hotspot" class="nav-item <%= active === 'hotspot' ? 'active' : '' %>">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0114.08 0"/><path d="M1.42 9a16 16 0 0121.16 0"/><path d="M8.53 16.11a6 6 0 016.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
-        <span>Hotspot</span>
-      </a>
-      <a href="/reseller-voucher" class="nav-item <%= active === 'reseller-voucher' ? 'active' : '' %>">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="10" rx="2"/><path d="M2 12h20M7 12v3M17 9v3"/></svg>
-        <span>Reseller Voucher</span>
-      </a>
+      <% const _nNet = ['nms','traffic','queue','ippool','firewall'].includes(active); %>
+      <% const _nAcc = ['pppoe','wireguard','nas','hotspot','reseller-voucher'].includes(active); %>
+      <% const _nDev = ['devices','device-monitor','ping','ping-monitor','olt-management','genieacs'].includes(active); %>
+      <div class="nav-group <%= _nNet ? 'open' : '' %>" data-nav-group="noc-net">
+        <button type="button" class="nav-item nav-group-toggle <%= _nNet ? 'active' : '' %>" onclick="toggleNavGroup(this)">
+          <span>Jaringan</span>
+          <svg class="nav-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="nav-group-children">
+          <a href="/nms" class="nav-sub <%= active === 'nms' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>NMS Interface</span></a>
+          <a href="/monitoring/traffic" class="nav-sub <%= active === 'traffic' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>Traffic</span></a>
+          <a href="/monitoring/queue" class="nav-sub <%= active === 'queue' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>Simple Queue</span></a>
+          <a href="/monitoring/ippool" class="nav-sub <%= active === 'ippool' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>IP Pool</span></a>
+          <a href="/monitoring/firewall" class="nav-sub <%= active === 'firewall' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>Firewall</span></a>
+        </div>
+      </div>
+      <div class="nav-group <%= _nAcc ? 'open' : '' %>" data-nav-group="noc-acc">
+        <button type="button" class="nav-item nav-group-toggle <%= _nAcc ? 'active' : '' %>" onclick="toggleNavGroup(this)">
+          <span>Akses</span>
+          <svg class="nav-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="nav-group-children">
+          <a href="/monitoring/pppoe" class="nav-sub <%= active === 'pppoe' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>PPPoE</span><span class="nav-badge blue" id="pppoe-count" style="display:none">0</span></a>
+          <a href="/monitoring/wireguard" class="nav-sub <%= active === 'wireguard' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>WireGuard</span></a>
+          <a href="/monitoring/nas" class="nav-sub <%= active === 'nas' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>NAS RADIUS</span></a>
+          <a href="/monitoring/hotspot" class="nav-sub <%= active === 'hotspot' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>Hotspot</span></a>
+          <a href="/reseller-voucher" class="nav-sub <%= active === 'reseller-voucher' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>Reseller Voucher</span></a>
+        </div>
+      </div>
+      <div class="nav-group <%= _nDev ? 'open' : '' %>" data-nav-group="noc-dev">
+        <button type="button" class="nav-item nav-group-toggle <%= _nDev ? 'active' : '' %>" onclick="toggleNavGroup(this)">
+          <span>Perangkat</span>
+          <svg class="nav-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="nav-group-children">
+          <a href="/devices" class="nav-sub <%= active === 'devices' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>Device Management</span></a>
+          <a href="/monitoring/device-monitor" class="nav-sub <%= active === 'device-monitor' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>Device Monitor</span></a>
+          <a href="/monitoring/ping" class="nav-sub <%= active === 'ping' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>Host Monitor</span></a>
+          <a href="/monitoring/olt-management" class="nav-sub <%= active === 'olt-management' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>OLT</span></a>
+          <a href="/genieacs" class="nav-sub <%= active === 'genieacs' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>ONT</span></a>
+        </div>
+      </div>
     </div>
 
     <div class="nav-section">
@@ -398,83 +379,46 @@
     <!-- MONITORING -->
     <div class="nav-section">
       <span class="nav-section-title">MONITORING</span>
-      <a href="/nms" class="nav-item <%= active === 'nms' ? 'active' : '' %>">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
-        <span>NMS Interface</span>
-      </a>
-      <a href="/monitoring/traffic" class="nav-item <%= active === 'traffic' ? 'active' : '' %>">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg>
-        <span>Traffic Interface</span>
-      </a>
-      <a href="/monitoring/pppoe" class="nav-item <%= active === 'pppoe' ? 'active' : '' %>">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
-        <span>PPPoE Sessions</span>
-        <span class="nav-badge blue" id="pppoe-count" style="display:none">0</span>
-      </a>
-      <a href="/monitoring/wireguard" class="nav-item <%= active === 'wireguard' ? 'active' : '' %>">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
-        <span>WireGuard</span>
-      </a>
-      <a href="/monitoring/nas" class="nav-item <%= active === 'nas' ? 'active' : '' %>">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="7" rx="2"/><rect x="2" y="14" width="20" height="7" rx="2"/><line x1="6" y1="6.5" x2="6.01" y2="6.5"/><line x1="6" y1="17.5" x2="6.01" y2="17.5"/></svg>
-        <span>NAS RADIUS</span>
-      </a>
-      <a href="/monitoring/queue" class="nav-item <%= active === 'queue' ? 'active' : '' %>">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16,3 21,3 21,8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21,16 21,21 16,21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
-        <span>Simple Queue</span>
-      </a>
-      <a href="/monitoring/ippool" class="nav-item <%= active === 'ippool' ? 'active' : '' %>">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
-        <span>IP Pool</span>
-      </a>
-      <a href="/monitoring/firewall" class="nav-item <%= active === 'firewall' ? 'active' : '' %>">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        <span>Firewall</span>
-      </a>
-      <a href="/monitoring/olt-management" class="nav-item <%= active === 'olt-management' ? 'active' : '' %>">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="7" rx="2"/><rect x="2" y="14" width="20" height="7" rx="2"/><line x1="6" y1="6.5" x2="6.01" y2="6.5"/><line x1="6" y1="17.5" x2="6.01" y2="17.5"/><path d="M16 6.5h2M16 17.5h2"/></svg>
-        <span>OLT Management</span>
-      </a>
-      <a href="/genieacs" class="nav-item <%= active === 'genieacs' ? 'active' : '' %>">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M6 14h.01M10 10h8M10 14h5"/></svg>
-        <span>ONT Management</span>
-        <span class="nav-badge green" id="genieacs-online-badge" style="display:none">0</span>
-      </a>
-      <a href="/monitoring/ping" class="nav-item <%= active === 'ping-monitor' ? 'active' : '' %>">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M2 12h3m14 0h3M12 2v3m0 14v3M5.64 5.64l2.12 2.12m8.48 8.48l2.12 2.12M5.64 18.36l2.12-2.12m8.48-8.48l2.12-2.12"/></svg>
-        <span>Host Monitor</span>
-        <span class="nav-badge red" id="ping-down-badge" style="display:none">0</span>
-      </a>
-      <a href="/devices" class="nav-item <%= active === 'devices' ? 'active' : '' %>">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/><line x1="10" y1="6" x2="18" y2="6"/><line x1="10" y1="18" x2="18" y2="18"/></svg>
-        <span>Device Management</span>
-      </a>
-      <a href="/monitoring/device-monitor" class="nav-item <%= active === 'device-monitor' ? 'active' : '' %>">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M7 8h.01M10 8h4"/></svg>
-        <span>Device Monitor</span>
-      </a>
-      <%# Hotspot dropdown — auto-expanded if on hotspot or voucher-template page %>
-      <% const _hotspotActive = ['hotspot','voucher-template'].includes(active); %>
-      <div class="nav-group <%= _hotspotActive ? 'open' : '' %>" data-nav-group="hotspot">
-        <button type="button" class="nav-item nav-group-toggle <%= active === 'hotspot' ? 'active' : '' %>" onclick="toggleNavGroup(this)">
-          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M5 12.55a11 11 0 0114.08 0"/>
-            <path d="M1.42 9a16 16 0 0121.16 0"/>
-            <path d="M8.53 16.11a6 6 0 016.95 0"/>
-            <circle cx="12" cy="20" r="1"/>
-          </svg>
-          <span>Hotspot</span>
+      <% const _aNet = ['nms','traffic','queue','ippool','firewall'].includes(active); %>
+      <% const _aAcc = ['pppoe','wireguard','nas','hotspot','voucher-template'].includes(active); %>
+      <% const _aDev = ['devices','device-monitor','ping-monitor','ping','olt-management','genieacs'].includes(active); %>
+      <div class="nav-group <%= _aNet ? 'open' : '' %>" data-nav-group="adm-net">
+        <button type="button" class="nav-item nav-group-toggle <%= _aNet ? 'active' : '' %>" onclick="toggleNavGroup(this)">
+          <span>Jaringan</span>
           <svg class="nav-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="nav-group-children">
-          <a href="/monitoring/hotspot" class="nav-sub <%= active === 'hotspot' ? 'active' : '' %>">
-            <span class="nav-sub-dot"></span>
-            <span>Manajemen</span>
-          </a>
-          <a href="/voucher-template" class="nav-sub <%= active === 'voucher-template' ? 'active' : '' %>">
-            <span class="nav-sub-dot"></span>
-            <span>Template Voucher</span>
-          </a>
+          <a href="/nms" class="nav-sub <%= active === 'nms' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>NMS Interface</span></a>
+          <a href="/monitoring/traffic" class="nav-sub <%= active === 'traffic' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>Traffic</span></a>
+          <a href="/monitoring/queue" class="nav-sub <%= active === 'queue' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>Simple Queue</span></a>
+          <a href="/monitoring/ippool" class="nav-sub <%= active === 'ippool' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>IP Pool</span></a>
+          <a href="/monitoring/firewall" class="nav-sub <%= active === 'firewall' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>Firewall</span></a>
+        </div>
+      </div>
+      <div class="nav-group <%= _aAcc ? 'open' : '' %>" data-nav-group="adm-acc">
+        <button type="button" class="nav-item nav-group-toggle <%= _aAcc ? 'active' : '' %>" onclick="toggleNavGroup(this)">
+          <span>Akses</span>
+          <svg class="nav-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="nav-group-children">
+          <a href="/monitoring/pppoe" class="nav-sub <%= active === 'pppoe' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>PPPoE</span><span class="nav-badge blue" id="pppoe-count" style="display:none">0</span></a>
+          <a href="/monitoring/wireguard" class="nav-sub <%= active === 'wireguard' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>WireGuard</span></a>
+          <a href="/monitoring/nas" class="nav-sub <%= active === 'nas' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>NAS RADIUS</span></a>
+          <a href="/monitoring/hotspot" class="nav-sub <%= active === 'hotspot' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>Hotspot</span></a>
+          <a href="/voucher-template" class="nav-sub <%= active === 'voucher-template' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>Template Voucher</span></a>
+        </div>
+      </div>
+      <div class="nav-group <%= _aDev ? 'open' : '' %>" data-nav-group="adm-dev">
+        <button type="button" class="nav-item nav-group-toggle <%= _aDev ? 'active' : '' %>" onclick="toggleNavGroup(this)">
+          <span>Perangkat</span>
+          <svg class="nav-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="nav-group-children">
+          <a href="/devices" class="nav-sub <%= active === 'devices' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>Device Management</span></a>
+          <a href="/monitoring/device-monitor" class="nav-sub <%= active === 'device-monitor' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>Device Monitor</span></a>
+          <a href="/monitoring/ping" class="nav-sub <%= active === 'ping-monitor' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>Host Monitor</span><span class="nav-badge red" id="ping-down-badge" style="display:none">0</span></a>
+          <a href="/monitoring/olt-management" class="nav-sub <%= active === 'olt-management' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>OLT</span></a>
+          <a href="/genieacs" class="nav-sub <%= active === 'genieacs' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>ONT</span><span class="nav-badge green" id="genieacs-online-badge" style="display:none">0</span></a>
         </div>
       </div>
     </div>
@@ -757,7 +701,7 @@
   max-height:0;overflow:hidden;
   transition:max-height .25s ease;
 }
-.nav-group.open .nav-group-children{max-height:240px;}
+.nav-group.open .nav-group-children{max-height:480px;}
 .nav-sub{
   display:flex;align-items:center;gap:10px;
   padding:8px 18px 8px 44px;
@@ -840,6 +784,7 @@
   padding:5px 10px 5px 32px !important;
   font-size:12px !important;
 }
+#sidebar .nav-sub .nav-badge{margin-left:auto;}
 #sidebar .nav-sub:hover,
 #sidebar .nav-sub.active{
   color:#00e5ff !important;
