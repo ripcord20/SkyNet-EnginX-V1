@@ -1005,6 +1005,11 @@ const startServer = async () => {
       await safeSync(db.BotCommand,              'bot_commands');
       await safeSync(db.NetworkHealthSnapshot,   'network_health_snapshots');
       await safeSync(db.NetworkHealthSample,     'network_health_samples');
+      try {
+        await require('./utils/deviceCascade').ensureDeviceFkRules(db.sequelize, logger);
+      } catch (e) {
+        logger.warn('deviceCascade FK migrate skipped: ' + e.message);
+      }
       // Seed perintah bot bawaan (idempotent — hanya menambah yang belum ada).
       try { await require('./services/BotCommandSeed').seedDefaults(); }
       catch (e) { logger.warn('Seed bot_commands skipped: ' + e.message); }

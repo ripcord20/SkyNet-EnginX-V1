@@ -2,6 +2,7 @@ const { Device, DeviceLog, TrafficData, sequelize } = require('../models');
 const { Op } = require('sequelize');
 const { paginateResponse } = require('../utils/helpers');
 const { parseCpuPercent } = require('../utils/mikrotikResource');
+const { unlinkDevice, parseFkTableFromError } = require('../utils/deviceCascade');
 const net = require('net');
 const logger = require('../utils/logger');
 
@@ -148,174 +149,46 @@ class DeviceController {
         return res.status(404).json({ success: false, message: 'Device not found' });
       }
 
-      // Stop SNMP polling dulu sebelum hapus
       try {
         const SNMPService = require('../services/SNMPService');
         const snmp = SNMPService.getInstance();
         if (snmp) snmp.stopDevice(device.id);
-      } catch(e) {}
+      } catch (e) {}
 
-      // ─── Cleanup child tables yang reference devices.id ──────────
-      // Beberapa tabel punya FK ke devices tapi TIDAK punya ON DELETE CASCADE
-      // di DB schema-nya. Kita manual delete supaya `device.destroy()` tidak
-      // gagal karena foreign key constraint.
-      //
-      // Pendekatan: best-effort delete dari setiap child table. Kalau tabel
-      // tidak ada (mis. fitur belum migrate), catch & lanjut.
-      const cleanups = [
-        // Sequelize models (sudah ada di codebase)
-        { name: 'DeviceLog',            where: { device_id: device.id } },
-        { name: 'TrafficData',          where: { device_id: device.id } },
-        { name: 'NocMonitorPreset',     where: { router_id: device.id } },
-        // FK ON DELETE NO ACTION — tanpa ini hapus device gagal & row tetap tampil
-        { name: 'NmsInterfacePreset',   where: { router_id: device.id } },
-        { name: 'NetworkHealthSample',  where: { device_id: device.id } },
-        { name: 'NetworkHealthSnapshot',where: { device_id: device.id } },
-      ];
+      // Device Management adalah sumber kebenaran: hapus device kapan saja,
+      // data modul lain (Network Health, log, NMS, isolir, …) ikut dilepas.
+      await unlinkDevice(sequelize, device.id, t);
 
-      for (const c of cleanups) {
-        try {
-          const Model = require('../models')[c.name];
-          if (Model) {
-            const n = await Model.destroy({ where: c.where, transaction: t });
-            if (n > 0) {
-              logger.info(`[Device.destroy] cleaned ${n} ${c.name} row(s) for device ${device.id}`);
-            }
-          }
-        } catch (e) {
-          // Model tidak ada / column tidak ada — fail soft
-          logger.warn(`[Device.destroy] cleanup ${c.name} skipped: ${e.message}`);
-        }
-      }
-
-      // Customer.mikrotik_id — jangan delete customer, tapi set mikrotik_id = NULL
-      // (customer tetap ada, hanya unlink dari router yang akan dihapus)
+      const tryDestroy = async () => device.destroy({ transaction: t });
       try {
-        const Customer = require('../models').Customer;
-        if (Customer) {
-          const [updated] = await Customer.update(
-            { mikrotik_id: null },
-            { where: { mikrotik_id: device.id }, transaction: t }
-          );
-          if (updated > 0) {
-            logger.info(`[Device.destroy] unlinked ${updated} customer(s) from device ${device.id}`);
-          }
+        await tryDestroy();
+      } catch (err) {
+        if (!String(err.message).match(/foreign key constraint/i)) throw err;
+        const table = parseFkTableFromError(err.message);
+        logger.warn(`[Device.destroy] FK sisa di ${table || '?'}, retry unlink`);
+        if (table && /^[A-Za-z0-9_]+$/.test(table)) {
+          await sequelize.query(
+            `DELETE FROM \`${table}\` WHERE device_id = ?`,
+            { replacements: [device.id], transaction: t }
+          ).catch(() => {});
+          await sequelize.query(
+            `DELETE FROM \`${table}\` WHERE router_id = ?`,
+            { replacements: [device.id], transaction: t }
+          ).catch(() => {});
         }
-      } catch (e) {
-        logger.warn(`[Device.destroy] customer unlink skipped: ${e.message}`);
+        await unlinkDevice(sequelize, device.id, t);
+        await tryDestroy();
       }
 
-      // Job PPPoE bulk — hapus item dulu (FK job_id), baru header-nya.
-      try {
-        const { PppoeProvisionJob, PppoeProvisionItem } = require('../models');
-        if (PppoeProvisionJob && PppoeProvisionItem) {
-          const jobs = await PppoeProvisionJob.findAll({
-            where: { device_id: device.id }, attributes: ['id'], transaction: t
-          });
-          const jobIds = jobs.map(j => j.id);
-          if (jobIds.length) {
-            await PppoeProvisionItem.destroy({ where: { job_id: jobIds }, transaction: t });
-            await PppoeProvisionJob.destroy({ where: { device_id: device.id }, transaction: t });
-          }
-        }
-      } catch (e) {
-        logger.warn(`[Device.destroy] pppoe provision cleanup skipped: ${e.message}`);
-      }
-
-      // Reseller: jangan hapus akun, hanya lepas tautan router
-      try {
-        const { Reseller, ResellerVoucherPackage } = require('../models');
-        if (Reseller) {
-          await Reseller.update({ device_id: null }, { where: { device_id: device.id }, transaction: t });
-        }
-        if (ResellerVoucherPackage) {
-          await ResellerVoucherPackage.update({ device_id: null }, { where: { device_id: device.id }, transaction: t });
-        }
-      } catch (e) {
-        logger.warn(`[Device.destroy] reseller unlink skipped: ${e.message}`);
-      }
-
-      // Generic raw SQL cleanup untuk child tables yang tidak punya model di Sequelize
-      // (fail-soft kalau tabel tidak ada). Tambahkan di sini kalau ada FK error baru.
-      // Isolir extension (mikrotik_devices.device_id → devices.id).
-      // Hapus bypass dulu (pakai mikrotik_devices.id), baru extension-nya.
-      try {
-        await sequelize.query(
-          `DELETE FROM isolir_bypass_router
-            WHERE device_id IN (SELECT id FROM mikrotik_devices WHERE device_id = ?)`,
-          { replacements: [device.id], transaction: t }
-        );
-      } catch (e) {
-        if (!String(e.message).match(/doesn'?t exist|Unknown table|no such table/i)) {
-          logger.warn(`[Device.destroy] isolir_bypass cleanup skipped: ${e.message}`);
-        }
-      }
-      try {
-        const [[ext]] = await sequelize.query(
-          `SELECT id FROM mikrotik_devices WHERE device_id = ?`,
-          { replacements: [device.id], transaction: t }
-        );
-        if (ext && ext.id) {
-          try {
-            const Customer = require('../models').Customer;
-            if (Customer) {
-              await Customer.update(
-                { mikrotik_id: null },
-                { where: { mikrotik_id: ext.id }, transaction: t }
-              );
-            }
-          } catch (_) {}
-        }
-        await sequelize.query(
-          `DELETE FROM mikrotik_devices WHERE device_id = ?`,
-          { replacements: [device.id], transaction: t }
-        );
-      } catch (e) {
-        if (!String(e.message).match(/doesn'?t exist|Unknown table|no such table/i)) {
-          logger.warn(`[Device.destroy] mikrotik_devices cleanup skipped: ${e.message}`);
-        }
-      }
-
-      const rawCleanups = [
-        // tabel monitoring/snmp lain yang mungkin reference devices
-        `DELETE FROM device_metrics WHERE device_id = ?`,
-        `DELETE FROM device_alerts WHERE device_id = ?`,
-        `DELETE FROM interface_stats WHERE device_id = ?`,
-        `DELETE FROM hotspot_traffic_log WHERE device_id = ?`,
-        `DELETE FROM nms_interfaces WHERE device_id = ?`,
-        `DELETE FROM monitor_states WHERE kind = 'device' AND ref_id = ?`,
-        `DELETE FROM network_health_samples WHERE device_id = ?`,
-        `DELETE FROM network_health_snapshots WHERE device_id = ?`,
-      ];
-      for (const sql of rawCleanups) {
-        try {
-          await sequelize.query(sql, {
-            replacements: [device.id],
-            transaction: t,
-          });
-        } catch (e) {
-          // Tabel tidak ada — abaikan. ER_NO_SUCH_TABLE = code 1146
-          if (!String(e.message).match(/doesn'?t exist|Unknown table|no such table/i)) {
-            logger.warn(`[Device.destroy] raw cleanup failed: ${e.message}`);
-          }
-        }
-      }
-
-      // Sekarang hapus device-nya
-      await device.destroy({ transaction: t });
       await t.commit();
-      res.json({ success: true, message: 'Device deleted' });
+      res.json({ success: true, message: 'Device dihapus. Data terkait di modul lain ikut dibersihkan.' });
     } catch (error) {
-      try { await t.rollback(); } catch(_) {}
+      try { await t.rollback(); } catch (_) {}
       logger.error(`[Device.destroy] failed: ${error.message}`);
-      // Pesan ramah ke user: kalau FK error, hint apa yang perlu dihapus dulu
-      let msg = error.message || 'Gagal menghapus device';
-      if (String(msg).match(/foreign key constraint/i)) {
-        const m = msg.match(/`(\w+)`\.\.?`(\w+)`/);
-        const tableHint = m ? m[2] : '(tabel anak)';
-        msg = `Device tidak bisa dihapus karena masih terhubung dengan ${tableHint}. Hapus data terkait dulu, atau hubungi admin untuk update schema FK.`;
-      }
-      res.status(500).json({ success: false, message: msg });
+      res.status(500).json({
+        success: false,
+        message: 'Gagal menghapus device: ' + (error.message || 'error')
+      });
     }
   }
 

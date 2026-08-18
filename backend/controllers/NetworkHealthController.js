@@ -72,11 +72,18 @@ exports.overview = async (req, res) => {
         model: Device,
         as: 'device',
         attributes: ['id', 'name', 'ip_address', 'type', 'brand', 'model', 'location', 'status'],
+        required: false,
       }],
       order: [['device_id', 'ASC']],
     });
 
-    const devices = rows.map(r => {
+    const orphanIds = rows.filter(r => !r.device).map(r => r.device_id).filter(Boolean);
+    if (orphanIds.length) {
+      await NetworkHealthSnapshot.destroy({ where: { device_id: { [Op.in]: orphanIds } } }).catch(() => {});
+      await NetworkHealthSample.destroy({ where: { device_id: { [Op.in]: orphanIds } } }).catch(() => {});
+    }
+
+    const devices = rows.filter(r => r.device).map(r => {
       const j = r.toJSON();
       return {
         id: j.device_id,
