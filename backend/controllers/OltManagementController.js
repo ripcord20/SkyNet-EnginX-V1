@@ -36,6 +36,9 @@ const CdataOltService = require('../services/CdataOltService');
 const HiosoOltService = require('../services/HiosoOltService');
 const ZimmlinkOltService = require('../services/ZimmlinkOltService');
 const HsgqEponOltService = require('../services/HsgqEponOltService');
+const HsgqGponOltService = require('../services/HsgqGponOltService');
+const CdataEponOltService = require('../services/CdataEponOltService');
+const HiosoEponOltService = require('../services/HiosoEponOltService');
 const GponCliOltService = require('../services/GponCliOltService');
 const HuaweiOltService = require('../services/HuaweiOltService');
 const FiberhomeOltService = require('../services/FiberhomeOltService');
@@ -51,7 +54,7 @@ const ZTE_STYLE = new Set(['zte']);
 function isZteStyle(brand) { return ZTE_STYLE.has(String(brand || 'zte').toLowerCase()); }
 const HUAWEI_STYLE = new Set(['huawei']);
 function isHuaweiStyle(brand) { return HUAWEI_STYLE.has(String(brand || '').toLowerCase()); }
-const EPON_BRANDS = new Set(['hsgq']);
+const EPON_BRANDS = new Set(['hsgq', 'hsgq-epon', 'hioso-epon', 'cdata-epon']);
 function isEpon(brand) { return EPON_BRANDS.has(String(brand || '').toLowerCase()); }
 function oltUiStyle(brand) {
   const b = String(brand || 'zte').toLowerCase();
@@ -139,15 +142,19 @@ function makeService(cfg) {
   let svc;
   switch ((cfg.brand || 'zte').toLowerCase()) {
     case 'cdata':
-    case 'vsol':     svc = new CdataOltService(opts); break;
-    case 'generic':  svc = new GponCliOltService(opts); break;
-    case 'hioso':    svc = new HiosoOltService(opts); break;
-    case 'zimmlink': svc = new ZimmlinkOltService(opts); break;
-    case 'hsgq':     svc = new HsgqEponOltService(opts); break;
-    case 'huawei':   svc = new HuaweiOltService(opts); break;
-    case 'fiberhome':svc = new FiberhomeOltService(opts); break;
+    case 'vsol':      svc = new CdataOltService(opts); break;
+    case 'cdata-epon':svc = new CdataEponOltService(opts); break;
+    case 'generic':   svc = new GponCliOltService(opts); break;
+    case 'hioso':     svc = new HiosoOltService(opts); break;
+    case 'hioso-epon':svc = new HiosoEponOltService(opts); break;
+    case 'zimmlink':  svc = new ZimmlinkOltService(opts); break;
+    case 'hsgq':
+    case 'hsgq-epon': svc = new HsgqEponOltService(opts); break;
+    case 'hsgq-gpon': svc = new HsgqGponOltService(opts); break;
+    case 'huawei':    svc = new HuaweiOltService(opts); break;
+    case 'fiberhome': svc = new FiberhomeOltService(opts); break;
     case 'zte':
-    default:         svc = new ZteOltService(opts); break;
+    default:          svc = new ZteOltService(opts); break;
   }
   return _serialize(svc, cfg);
 }

@@ -941,17 +941,30 @@
         <div class="form-group" style="flex:1">
           <label class="form-label">Brand</label>
           <select id="oltBrand" class="form-control" onchange="OltMgmt.onBrandChange()">
-            <option value="zte">ZTE (C300 / C320 / C620)</option>
-            <option value="huawei">Huawei (MA5600T / MA5800)</option>
-            <option value="fiberhome">FiberHome (AN5516 / AN6000)</option>
-            <option value="cdata">CDATA (FD12xx / FD16xx)</option>
-            <option value="vsol">VSOL / OEM GPON</option>
-            <option value="hioso">HIOSO</option>
-            <option value="zimmlink">ZIMMLINK</option>
-            <option value="hsgq">HSGQ EPON (E04 / E08)</option>
-            <option value="generic">Generic GPON (Cortina / Realtek)</option>
+            <optgroup label="ZTE / Huawei / FiberHome">
+              <option value="zte">ZTE GPON (C300 / C320 / C620)</option>
+              <option value="huawei">Huawei GPON (MA5600T / MA5800)</option>
+              <option value="fiberhome">FiberHome GPON (AN5516 / AN6000)</option>
+            </optgroup>
+            <optgroup label="CDATA">
+              <option value="cdata">CDATA GPON (FD12xx / FD16xx)</option>
+              <option value="cdata-epon">CDATA EPON (FD11xx / FD12xx EPON)</option>
+            </optgroup>
+            <optgroup label="HIOSO">
+              <option value="hioso">HIOSO GPON</option>
+              <option value="hioso-epon">HIOSO EPON</option>
+            </optgroup>
+            <optgroup label="HSGQ">
+              <option value="hsgq-gpon">HSGQ GPON</option>
+              <option value="hsgq">HSGQ EPON (E04 / E08)</option>
+            </optgroup>
+            <optgroup label="Lainnya">
+              <option value="vsol">VSOL / OEM GPON</option>
+              <option value="zimmlink">ZIMMLINK GPON</option>
+              <option value="generic">Generic GPON (Cortina / Realtek)</option>
+            </optgroup>
           </select>
-          <div class="form-hint" id="oltBrandHint">CLI ZTE: frame/slot/port seperti 1/2/1</div>
+          <div class="form-hint" id="oltBrandHint">Pilih GPON atau EPON sesuai perangkat. ONU GPON pakai serial, EPON pakai MAC.</div>
         </div>
       </div>
       <div class="form-row">
@@ -1351,6 +1364,6 @@
 
 <script src="/vendor/apexcharts/apexcharts.min.js"></script>
 <script src="/js/app.js"></script>
-<script src="/js/olt-management.js?v=multivendor1"></script>
+<script src="/js/olt-management.js?v=multivendor2"></script>
 </body>
 </html>

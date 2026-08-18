@@ -327,12 +327,14 @@ class GponCliOltService extends BaseCliOltService {
     await this._exitConfig();
   }
 
-  async authorizeOnu({ port, onuId, type, sn, name, description }) {
+  async authorizeOnu({ port, onuId, type, sn, mac, name, description }) {
     const p = this._normPort(port);
     onuId = parseInt(onuId);
-    if (p == null || !onuId || !type || !sn) throw new Error('port, onuId, type, dan sn wajib diisi');
+    const ident = String(mac || sn || '').trim();
+    if (p == null || !onuId || !ident) throw new Error('port, onuId, dan SN/MAC wajib diisi');
+    type = type || (this.epon ? 'ONU' : 'ONU');
     await this._enterIf(p);
-    let out = await this.exec(this._fmt(this.cmd.authorize, { id: onuId, type, sn }));
+    let out = await this.exec(this._fmt(this.cmd.authorize, { id: onuId, type, sn: ident, mac: ident }));
     if (name)        out += '\n' + await this._safeExec(this._fmt(this.cmd.editName, { id: onuId, name }));
     if (description) out += '\n' + await this._safeExec(this._fmt(this.cmd.editDesc, { id: onuId, desc: description }));
     await this._exitIf();
