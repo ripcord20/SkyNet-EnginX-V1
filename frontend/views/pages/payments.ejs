@@ -138,6 +138,23 @@
     .mpill { text-align:center;padding:8px 4px;border-radius:10px;border:1.5px solid var(--d-border);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;background:#fff;color:var(--d-text);user-select:none; }
     .mpill.active { border-color:var(--d-blue1); background:#eff6ff; color:var(--d-blue1); }
     .mpill:hover:not(.active) { background:#f8faff; }
+    .cov-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+    .cpill { text-align:center;padding:9px 4px;border-radius:10px;border:1.5px solid var(--d-border);font-size:12px;font-weight:700;cursor:pointer;transition:all .15s;background:#fff;color:var(--d-text);user-select:none; line-height:1.25; }
+    .cpill small { display:block; font-size:10px; font-weight:600; color:var(--d-muted); margin-top:2px; }
+    .cpill.active { border-color:var(--d-blue1); background:#eff6ff; color:var(--d-blue1); }
+    .cpill.active small { color:#3b82f6; }
+    .cpill:hover:not(.active) { background:#f8faff; }
+    .debt-box { display:none; margin-bottom:14px; padding:11px 13px; background:#fff7ed; border:1.5px solid #fdba74; border-radius:12px; }
+    .debt-box.show { display:block; }
+    .debt-row { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+    .debt-lbl { font-size:11px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:#c2410c; }
+    .debt-val { font-size:15px; font-weight:800; color:#9a3412; }
+    .debt-actions { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:10px; flex-wrap:wrap; }
+    .debt-check { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:#9a3412; cursor:pointer; }
+    .debt-check input { accent-color:#ea580c; }
+    .debt-pay-btn { border:none; background:#fff; color:#c2410c; border:1.5px solid #fdba74; border-radius:8px; padding:6px 10px; font-size:11.5px; font-weight:800; cursor:pointer; font-family:inherit; }
+    .debt-pay-btn:hover { background:#ffedd5; }
+    .debt-hint { font-size:11px; color:#b45309; margin-top:8px; line-height:1.4; }
 
     /* WA toggle */
     .wa-toggle-row { display:flex;align-items:center;gap:10px;padding:11px 13px;background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:10px;margin-bottom:14px; }
@@ -478,6 +495,17 @@
             </div>
           </div>
 
+          <!-- Coverage: 1 bulan / double / triwulan -->
+          <div class="pf-field">
+            <label class="pf-label">Cakupan Bayar</label>
+            <div class="cov-grid">
+              <div class="cpill active" data-months="1" onclick="selectCoverage(this,1)">1 Bulan<small>periode ini</small></div>
+              <div class="cpill" data-months="2" onclick="selectCoverage(this,2)">Double<small>2 bulan</small></div>
+              <div class="cpill" data-months="3" onclick="selectCoverage(this,3)">Triwulan<small>3 bulan</small></div>
+            </div>
+            <input type="hidden" id="payMonths" value="1">
+          </div>
+
           <!-- Amount & Date -->
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
             <div class="pf-field" id="amountFieldWrap">
@@ -488,6 +516,23 @@
               <label class="pf-label">Tanggal *</label>
               <input type="date" id="payDate" class="pf-input">
             </div>
+          </div>
+          <div id="coverageHint" style="font-size:11px;color:var(--d-muted);margin:-6px 0 12px;"></div>
+
+          <!-- Hutang -->
+          <div class="debt-box" id="debtBox">
+            <div class="debt-row">
+              <span class="debt-lbl">Hutang pelanggan</span>
+              <span class="debt-val" id="debtVal">Rp 0</span>
+            </div>
+            <div class="debt-actions">
+              <label class="debt-check">
+                <input type="checkbox" id="payIncludeDebt" checked onchange="onIncludeDebtChange()">
+                Sertakan hutang di jumlah
+              </label>
+              <button type="button" class="debt-pay-btn" onclick="submitDebtOnly()">Bayar hutang saja</button>
+            </div>
+            <div class="debt-hint">Jika jumlah lebih kecil dari tagihan, selisih otomatis dicatat sebagai hutang. Kelebihan bayar memotong hutang.</div>
           </div>
 
           <!-- Method -->
@@ -816,7 +861,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.2/dist/socket.io.min.js"></script>
 <script src="/js/app.js"></script>
-<script src="/js/payments.js?v=batch1"></script>
+<script src="/js/payments.js?v=multi1"></script>
 
 <script>
 (function(){

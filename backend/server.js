@@ -733,6 +733,24 @@ const startServer = async () => {
       logger.warn('Failed to migrate customers.public_link_token: ' + (e.message || e));
     }
 
+    // ── Migrasi: customers.carry_over_amount (sistem hutang / kurang bayar) ─
+    try {
+      const [rows] = await db.sequelize.query(
+        `SELECT COUNT(*) AS c FROM information_schema.columns
+          WHERE table_schema = DATABASE()
+            AND table_name = 'customers'
+            AND column_name = 'carry_over_amount'`
+      );
+      if (!(rows && rows[0] && parseInt(rows[0].c) > 0)) {
+        await db.sequelize.query(
+          `ALTER TABLE customers ADD COLUMN carry_over_amount DECIMAL(12,2) NOT NULL DEFAULT 0 AFTER due_date`
+        );
+        logger.info('Migrated: customers.carry_over_amount column added');
+      }
+    } catch (e) {
+      logger.warn('Failed to migrate customers.carry_over_amount: ' + (e.message || e));
+    }
+
     // ── Migrasi: kolom verifikasi pembayaran manual (invoices) ──────────────
     // verification_status: alur konfirmasi MANUAL saja (transfer bank + bukti).
     //   none      = belum ada pengajuan

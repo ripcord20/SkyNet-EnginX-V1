@@ -6,7 +6,7 @@ let _payPage    = 1;
 let _payMethod  = 'cash';
 let _selCust    = null;
 let _searchTimer= null;
-let _payQueue   = [];   // [{id,name,cid,phone,billingDay,price,pkgName,dueDate,amount,paid,checked}]
+let _payQueue   = [];   // [{id,name,cid,phone,billingDay,price,pkgName,dueDate,amount,paid,checked,debt}]
 let _lastCustHits = [];
 const MONTHS = ['','Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 const METHOD_COLORS = { cash:'#059669',transfer:'#2563eb',dana:'#0ea5e9',ovo:'#1d4ed8',gopay:'#16a34a',qris:'#d97706',field_collection:'#0d9488' };
@@ -86,14 +86,38 @@ function updateEmailToggle(on) {
 // Tambah 1 bulan ke sebuah Date, mempertahankan hari bila memungkinkan.
 // Kalau hari tujuan tidak ada di bulan target (mis. 31 -> Feb), clamp ke
 // hari terakhir bulan target.
-function addOneMonthKeepDay(date) {
+function addMonthsKeepDay(date, n) {
   const d = new Date(date.getTime());
   const day = d.getDate();
-  d.setDate(1);                 // hindari overflow saat ganti bulan
-  d.setMonth(d.getMonth() + 1);
+  const count = parseInt(n, 10) || 1;
+  d.setDate(1);
+  d.setMonth(d.getMonth() + count);
   const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
   d.setDate(Math.min(day, lastDay));
   return d;
+}
+
+function addOneMonthKeepDay(date) {
+  return addMonthsKeepDay(date, 1);
+}
+
+function getPayMonths() {
+  return Math.min(3, Math.max(1, parseInt(document.getElementById('payMonths')?.value, 10) || 1));
+}
+
+function includeDebtOn() {
+  return !!document.getElementById('payIncludeDebt')?.checked;
+}
+
+function coverageLabel(months) {
+  if (months === 3) return 'Triwulan';
+  if (months === 2) return 'Double';
+  return '1 bulan';
+}
+
+function coverageAmount(c) {
+  const base = (Number(c.price) || 0) * getPayMonths();
+  return base + (includeDebtOn() ? (Number(c.debt) || 0) : 0);
 }
 
 function toYmd(date) {
@@ -112,22 +136,24 @@ function toYmd(date) {
 function setDefaultDueDate(billingDay, customerDueDate) {
   const el = document.getElementById('payDueDate');
   if (!el) return;
+  const months = getPayMonths();
 
   if (customerDueDate) {
     const base = new Date(customerDueDate + 'T00:00:00');
     if (!isNaN(base.getTime())) {
-      el.value = toYmd(addOneMonthKeepDay(base));
+      el.value = toYmd(addMonthsKeepDay(base, months));
       return;
     }
   }
 
-  // Fallback: pakai billing_date, ambil bulan depan dari hari ini.
+  // Fallback: pakai billing_date, ambil bulan depan dari hari ini, lalu + (N-1).
   const today = new Date();
   const bd = parseInt(billingDay) || 1;
   let m = today.getMonth(), y = today.getFullYear();
   const thisMonthDue = new Date(y, m, bd);
   if (today >= thisMonthDue) { m++; if (m > 11) { m = 0; y++; } }
-  el.value = toYmd(new Date(y, m, bd));
+  const first = new Date(y, m, bd);
+  el.value = toYmd(months > 1 ? addMonthsKeepDay(first, months - 1) : first);
 }
 
 // ── STATS ─────────────────────────────────────────────────────
@@ -397,16 +423,18 @@ function queueTotal() {
 }
 
 function nextDueForCustomer(c) {
+  const months = getPayMonths();
   if (c && c.dueDate) {
     const base = new Date(c.dueDate + 'T00:00:00');
-    if (!isNaN(base.getTime())) return toYmd(addOneMonthKeepDay(base));
+    if (!isNaN(base.getTime())) return toYmd(addMonthsKeepDay(base, months));
   }
   const today = new Date();
   const bd = parseInt(c && c.billingDay, 10) || 1;
   let m = today.getMonth(), y = today.getFullYear();
   const thisMonthDue = new Date(y, m, bd);
   if (today >= thisMonthDue) { m++; if (m > 11) { m = 0; y++; } }
-  return toYmd(new Date(y, m, bd));
+  const first = new Date(y, m, bd);
+  return toYmd(months > 1 ? addMonthsKeepDay(first, months - 1) : first);
 }
 
 function renderPayQueue() {
@@ -417,16 +445,20 @@ function renderPayQueue() {
     box.style.display = 'none';
     updatePayButton();
     syncAmountDueFields();
+    updateDebtBox();
     return;
   }
   box.style.display = 'block';
   document.getElementById('pqCount').textContent = String(_payQueue.length);
   list.innerHTML = _payQueue.map(c => {
     const amt = Number(c.amount || 0).toLocaleString('id-ID');
+    const debtTxt = Number(c.debt || 0) > 0
+      ? ' · Hutang Rp ' + Number(c.debt).toLocaleString('id-ID')
+      : '';
     return '<div class="pq-item' + (c.paid ? ' is-paid' : '') + '">' +
       '<input class="pq-cb" type="checkbox" ' + (c.checked !== false && !c.paid ? 'checked' : '') +
         (c.paid ? ' disabled' : '') + ' onchange="toggleQueuedCheck(' + c.id + ', this.checked)">' +
-      '<div class="pq-name"><b>' + esc(c.name) + '</b><small>' + esc(c.cid) + (c.pkgName ? ' · ' + esc(c.pkgName) : '') + '</small></div>' +
+      '<div class="pq-name"><b>' + esc(c.name) + '</b><small>' + esc(c.cid) + (c.pkgName ? ' · ' + esc(c.pkgName) : '') + debtTxt + '</small></div>' +
       (c.paid ? '<span class="pq-badge">Lunas</span>' : '<input class="pq-amt" value="' + amt + '" oninput="formatAmount(this); updateQueuedAmount(' + c.id + ', this.value)">') +
       '<button type="button" class="pq-rm" title="Hapus" onclick="removeFromQueue(' + c.id + ')">×</button>' +
     '</div>';
@@ -434,6 +466,7 @@ function renderPayQueue() {
   document.getElementById('pqTotal').textContent = 'Rp ' + queueTotal().toLocaleString('id-ID');
   updatePayButton();
   syncAmountDueFields();
+  updateDebtBox();
 }
 
 function syncAmountDueFields() {
@@ -447,11 +480,11 @@ function syncAmountDueFields() {
       amtEl.readOnly = true;
     }
     if (dueWrap) dueWrap.style.opacity = '.7';
-    if (hint) hint.textContent = 'Beberapa pelanggan: jatuh tempo baru dihitung otomatis (jatuh tempo masing-masing + 1 bulan).';
+    if (hint) hint.textContent = 'Beberapa pelanggan: jatuh tempo baru dihitung otomatis (jatuh tempo masing-masing + ' + getPayMonths() + ' bulan).';
   } else {
     if (amtEl) amtEl.readOnly = false;
     if (dueWrap) dueWrap.style.opacity = '1';
-    if (hint) hint.textContent = 'Default: jatuh tempo pelanggan + 1 bulan. Bisa disesuaikan.';
+    if (hint) hint.textContent = 'Default: jatuh tempo pelanggan + ' + getPayMonths() + ' bulan. Bisa disesuaikan.';
     if (payable.length === 1 && amtEl && !amtEl.value) {
       amtEl.value = Number(payable[0].amount || 0).toLocaleString('id-ID');
     }
@@ -465,7 +498,9 @@ function updatePayButton() {
   const icon = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg> ';
   btn.disabled = false;
   btn.style.background = '';
-  btn.innerHTML = n > 1 ? (icon + 'Lunasi ' + n + ' Pelanggan') : (icon + 'Catat Pembayaran');
+  btn.innerHTML = n > 1
+    ? (icon + 'Lunasi ' + n + ' Pelanggan · ' + coverageLabel(getPayMonths()))
+    : (icon + 'Catat ' + coverageLabel(getPayMonths()));
 }
 
 window.toggleQueuedCheck = function(id, checked) {
@@ -514,6 +549,11 @@ window.onSingleAmountInput = function() {
 
 async function refreshQueuePaidFlags() {
   if (!_payQueue.length) return;
+  if (getPayMonths() > 1) {
+    _payQueue.forEach(c => { c.paid = false; });
+    renderPayQueue();
+    return;
+  }
   const m = document.getElementById('payPeriodMonth')?.value;
   const y = document.getElementById('payPeriodYear')?.value;
   if (!m || !y) return;
@@ -547,13 +587,15 @@ window.pickCustomerToQueue = async function(id) {
     price: hit.price,
     pkgName: hit.pkgName,
     dueDate: hit.dueDate,
-    amount: hit.price || 0,
+    debt: Number(hit.debt || 0),
+    amount: 0,
     paid: false,
     checked: true
   };
+  item.amount = coverageAmount(item);
   const pm = document.getElementById('payPeriodMonth')?.value;
   const py = document.getElementById('payPeriodYear')?.value;
-  if (pm && py) {
+  if (pm && py && getPayMonths() === 1) {
     const d = await App.api('/payments/check-paid?customer_id=' + item.id + '&month=' + pm + '&year=' + py);
     if (d?.paid) {
       item.paid = true;
@@ -589,7 +631,8 @@ async function searchCustomers(val) {
       billingDay: c.billing_date || 1,
       price: Number(c.package?.price || 0),
       pkgName: (c.package && c.package.name) || '',
-      dueDate: c.due_date || ''
+      dueDate: c.due_date || '',
+      debt: Number(c.carry_over_amount || 0)
     }));
     if (!_lastCustHits.length) {
       dd.innerHTML = '<div class="cust-item"><div class="ci-sub">Tidak ditemukan</div></div>';
@@ -601,7 +644,8 @@ async function searchCustomers(val) {
           '<div class="ci-body">' +
             '<div class="ci-name">' + esc(c.name) + ' <span style="font-size:10px;color:#6b7fa8;font-family:monospace;">' + esc(c.cid) + '</span></div>' +
             '<div class="ci-sub">' + esc(c.phone || '–') + ' · ' + esc(c.pkgName || 'Tanpa paket') +
-              (c.price ? ' · Rp ' + Number(c.price).toLocaleString('id-ID') : '') + '</div>' +
+              (c.price ? ' · Rp ' + Number(c.price).toLocaleString('id-ID') : '') +
+              (c.debt > 0 ? ' · <span style="color:#c2410c;font-weight:700;">Hutang Rp ' + Number(c.debt).toLocaleString('id-ID') + '</span>' : '') + '</div>' +
           '</div></div>';
       }).join('');
     }
@@ -629,17 +673,19 @@ async function checkAlreadyPaid(custId, month, year) {
         ? new Date(d.paid_date + 'T00:00:00').toLocaleDateString('id-ID', { day:'2-digit', month:'long', year:'numeric' })
         : '–';
       const monthName = ['','Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][parseInt(month)] || month;
+      const multi = getPayMonths() > 1;
       warn.innerHTML =
         '<div style="margin-top:8px;padding:10px 12px;background:#fef3c7;border:1.5px solid #fde68a;border-radius:8px;display:flex;align-items:center;gap:8px;">' +
           '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#d97706" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>' +
           '<div>' +
             '<div style="font-size:12.5px;font-weight:700;color:#92400e;">Periode ' + monthName + ' ' + year + ' sudah lunas</div>' +
-            '<div style="font-size:11px;color:#b45309;">Dibayar: ' + paidDateFmt + ' · ' + esc(d.invoice_number||'–') + ' — ganti Bulan/Tahun atau ceklis pelanggan lain</div>' +
+            '<div style="font-size:11px;color:#b45309;">Dibayar: ' + paidDateFmt + ' · ' + esc(d.invoice_number||'–') +
+              (multi ? ' — double/triwulan akan lanjut ke bulan berikutnya' : ' — ganti Bulan/Tahun atau ceklis pelanggan lain') + '</div>' +
           '</div>' +
         '</div>';
     }
-    // Jangan kunci tombol jika masih ada pelanggan lain di antrian.
-    if (!payableQueue().length && submitBtn) {
+    // Jangan kunci tombol jika masih ada pelanggan lain di antrian, atau cakupan > 1 bulan.
+    if (!payableQueue().length && getPayMonths() === 1 && submitBtn) {
       submitBtn.disabled = true;
       submitBtn.style.background = 'linear-gradient(135deg,#94a3b8,#64748b)';
       submitBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636"/></svg> Sudah Lunas Periode Ini';
@@ -669,6 +715,114 @@ window.selectMethod = function(el, method) {
   // Show/hide bank field
   const bankField = document.getElementById('bankField');
   if (bankField) bankField.style.display = method === 'transfer' ? 'block' : 'none';
+};
+
+window.selectCoverage = function(el, months) {
+  document.querySelectorAll('.cpill').forEach(p => p.classList.remove('active'));
+  if (el) el.classList.add('active');
+  const hidden = document.getElementById('payMonths');
+  if (hidden) hidden.value = String(months);
+  recalcCoverageAmounts();
+  if (_selCust) setDefaultDueDate(_selCust.billingDay, _selCust.dueDate);
+  else if (payableQueue()[0]) setDefaultDueDate(payableQueue()[0].billingDay, payableQueue()[0].dueDate);
+  const reCheck = () => {
+    refreshQueuePaidFlags();
+    if (!_selCust || !_selCust.id) return;
+    const m = document.getElementById('payPeriodMonth')?.value;
+    const y = document.getElementById('payPeriodYear')?.value;
+    checkAlreadyPaid(_selCust.id, m, y);
+  };
+  reCheck();
+};
+
+function recalcCoverageAmounts() {
+  _payQueue.forEach(c => { c.amount = coverageAmount(c); });
+  const payable = payableQueue();
+  const amtEl = document.getElementById('payAmount');
+  if (amtEl && payable.length === 1) {
+    amtEl.value = Number(payable[0].amount || 0).toLocaleString('id-ID');
+  } else if (amtEl && payable.length > 1) {
+    amtEl.value = queueTotal().toLocaleString('id-ID');
+  }
+  const hint = document.getElementById('coverageHint');
+  if (hint) {
+    const n = getPayMonths();
+    hint.textContent = n === 1
+      ? 'Jumlah default = harga paket. Bisa diubah; kurang bayar jadi hutang.'
+      : ('Jumlah default = harga paket × ' + n + ' bulan' + (includeDebtOn() ? ' + hutang' : '') + '.');
+  }
+  renderPayQueue();
+}
+
+function queueDebtTotal() {
+  return payableQueue().reduce((s, c) => s + (Number(c.debt) || 0), 0);
+}
+
+function updateDebtBox() {
+  const box = document.getElementById('debtBox');
+  const val = document.getElementById('debtVal');
+  const total = queueDebtTotal();
+  if (val) val.textContent = 'Rp ' + total.toLocaleString('id-ID');
+  if (box) box.classList.toggle('show', total > 0);
+}
+
+window.onIncludeDebtChange = function() {
+  recalcCoverageAmounts();
+};
+
+window.submitDebtOnly = async function() {
+  const queued = payableQueue();
+  const target = queued.find(c => Number(c.debt) > 0) || _selCust;
+  const debt = Number(target?.debt || 0);
+  if (!target || !target.id || debt <= 0) {
+    App.showToast('Tidak ada hutang yang bisa dilunasi', 'error');
+    return;
+  }
+  const ok = await payConfirm({
+    variant: 'ok',
+    title: 'Bayar Hutang Saja',
+    message: 'Lunasi hutang <b>' + esc(target.name) + '</b> sebesar <b>Rp ' + debt.toLocaleString('id-ID') + '</b>? Invoice periode tidak ikut dilunasi.',
+    okText: 'Ya, Bayar Hutang'
+  });
+  if (ok === null) return;
+
+  const btn = document.getElementById('submitBtn');
+  btn.dataset.busy = '1';
+  btn.disabled = true;
+  btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Menyimpan...';
+
+  const d = await App.api('/payments/record', {
+    method: 'POST',
+    body: JSON.stringify({
+      customer_id: target.id,
+      amount: debt,
+      payment_date: document.getElementById('payDate')?.value,
+      method: _payMethod,
+      bank: document.getElementById('payBank')?.value || '',
+      reference_no: document.getElementById('payRef')?.value || '',
+      due_date_after: document.getElementById('payDueDate')?.value || nextDueForCustomer(target),
+      send_wa: document.getElementById('paySendWa')?.checked ? 1 : 0,
+      send_email: document.getElementById('paySendEmail')?.checked ? 1 : 0,
+      notes: document.getElementById('payNotes')?.value || '',
+      period_month: document.getElementById('payPeriodMonth')?.value,
+      period_year: document.getElementById('payPeriodYear')?.value,
+      debt_only: 1
+    })
+  });
+
+  btn.dataset.busy = '';
+  btn.disabled = false;
+  updatePayButton();
+  if (d?.success) {
+    App.showToast(d.message, 'success');
+    resetForm();
+    _payPage = 1;
+    loadStats();
+    loadChart();
+    loadPayments();
+  } else {
+    App.showToast(d?.message || 'Gagal pelunasan hutang', 'error');
+  }
 };
 
 // ── FORMAT AMOUNT ─────────────────────────────────────────────
@@ -713,6 +867,8 @@ window.submitPayment = async function() {
     notes:        document.getElementById('payNotes')?.value || '',
     period_month: document.getElementById('payPeriodMonth')?.value,
     period_year:  document.getElementById('payPeriodYear')?.value,
+    months:       getPayMonths(),
+    include_debt: includeDebtOn() ? 1 : 0,
   };
 
   const d = await App.api('/payments/record', { method:'POST', body: JSON.stringify(body) });
@@ -780,6 +936,8 @@ async function submitBatchPayment(queued) {
     notes:        document.getElementById('payNotes')?.value || '',
     period_month: document.getElementById('payPeriodMonth')?.value,
     period_year:  document.getElementById('payPeriodYear')?.value,
+    months:       getPayMonths(),
+    include_debt: includeDebtOn() ? 1 : 0,
     items: queued.map(c => ({
       customer_id: c.id,
       name: c.name,
@@ -848,6 +1006,14 @@ function resetForm() {
   // Reset dates
   const today = new Date().toISOString().slice(0, 10);
   document.getElementById('payDate').value = today;
+  document.getElementById('payMonths').value = '1';
+  document.querySelectorAll('.cpill').forEach(p => p.classList.toggle('active', p.getAttribute('data-months') === '1'));
+  const includeDebt = document.getElementById('payIncludeDebt');
+  if (includeDebt) includeDebt.checked = true;
+  const debtBox = document.getElementById('debtBox');
+  if (debtBox) debtBox.classList.remove('show');
+  const covHint = document.getElementById('coverageHint');
+  if (covHint) covHint.textContent = '';
   setDefaultDueDate(1);
   updatePayButton();
 }

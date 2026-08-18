@@ -21,6 +21,75 @@ function addOneMonthKeepDay(dateInput) {
   return m.add(1, 'month').format('YYYY-MM-DD');
 }
 
+function addNMonthsKeepDay(dateInput, n) {
+  if (!dateInput) return null;
+  const m = moment(dateInput);
+  if (!m.isValid()) return null;
+  const count = Math.max(1, parseInt(n, 10) || 1);
+  return m.add(count, 'month').format('YYYY-MM-DD');
+}
+
+function nextPeriod(month, year) {
+  const m = parseInt(month, 10) || 1;
+  const y = parseInt(year, 10) || moment().year();
+  if (m >= 12) return { month: 1, year: y + 1 };
+  return { month: m + 1, year: y };
+}
+
+function parsePayAmount(amount) {
+  if (amount == null || amount === '') return 0;
+  if (typeof amount === 'number' && Number.isFinite(amount)) return Math.round(amount);
+  const digits = String(amount).replace(/[^\d]/g, '');
+  return parseInt(digits, 10) || 0;
+}
+
+function isTruthyFlag(v) {
+  return v === true || v === 1 || v === '1' || v === 'true' || v === 'on';
+}
+
+function coverageLabel(months) {
+  if (months === 3) return 'Triwulan';
+  if (months === 2) return 'Double';
+  return '1 bulan';
+}
+
+async function findOrCreatePeriodInvoice({ customer, customerId, month, year, dueDate, fallbackAmount, transaction: t }) {
+  let invoice = await Invoice.findOne({
+    where: { customer_id: customerId, period_month: month, period_year: year },
+    transaction: t
+  });
+  if (invoice) return invoice;
+
+  const { getNextInvoiceNumber } = require('../utils/helpers');
+  const invAmount = parseFloat(customer.package?.price || fallbackAmount || 0) || 0;
+  let invoiceNumber = null;
+  let attempts = 0;
+  while (attempts < 8) {
+    try {
+      const { invoiceNumber: candidate, prefix: candPrefix } = await getNextInvoiceNumber(sequelize, month, year, { transaction: t });
+      invoiceNumber = attempts === 0
+        ? candidate
+        : generateInvoiceNumber(year, month, parseInt(candidate.split('-').pop(), 10) + attempts, candPrefix || 'INV');
+      const exists = await Invoice.findOne({ where: { invoice_number: invoiceNumber }, transaction: t });
+      if (!exists) break;
+      attempts++;
+    } catch (_) { attempts++; }
+  }
+  if (!invoiceNumber) throw new Error('Gagal membuat nomor invoice');
+
+  return Invoice.create({
+    invoice_number: invoiceNumber,
+    customer_id: customerId,
+    amount: invAmount,
+    tax: 0,
+    total: invAmount,
+    status: 'unpaid',
+    due_date: dueDate,
+    period_month: month,
+    period_year: year
+  }, { transaction: t });
+}
+
 /**
  * Ambil daftar rekening pembayaran (payment_accounts) dari AppSetting dan
  * map ke bentuk yang dipahami invoice-renderer.js: { bank, no, name }.
@@ -235,15 +304,20 @@ class PaymentController {
       const {
         customer_id, amount, payment_date, method, bank,
         reference_no, due_date_after, send_wa, send_email,
-        notes, period_month, period_year
+        notes, period_month, period_year, months, include_debt, debt_only
       } = req.body;
 
-      if (!customer_id || !amount || !due_date_after) {
+      const debtOnly = isTruthyFlag(debt_only);
+      const coverageMonths = Math.min(3, Math.max(1, parseInt(months, 10) || 1));
+      const includeDebt = isTruthyFlag(include_debt);
+      const payAmount = parsePayAmount(amount);
+
+      if (!customer_id || !payAmount || (!debtOnly && !due_date_after)) {
         await t.rollback();
         const missing = [];
         if (!customer_id)    missing.push('customer_id');
-        if (!amount)         missing.push('amount');
-        if (!due_date_after) missing.push('due_date_after (jatuh tempo baru)');
+        if (!payAmount)      missing.push('amount');
+        if (!debtOnly && !due_date_after) missing.push('due_date_after (jatuh tempo baru)');
         return res.status(400).json({ success: false, message: 'Wajib diisi: ' + missing.join(', ') });
       }
 
@@ -255,112 +329,165 @@ class PaymentController {
 
       const pm = parseInt(period_month) || moment().month() + 1;
       const py = parseInt(period_year)  || moment().year();
-
-      // ── Cek duplikat: apakah periode ini sudah ada payment yang lunas? ──
-      const existingPaidInvoice = await Invoice.findOne({
-        where: { customer_id, period_month: pm, period_year: py, status: 'paid' },
-        include: [{ model: Payment, as: 'payments', attributes: ['id','amount','payment_date'] }],
-        transaction: t
-      });
-      if (existingPaidInvoice) {
-        await t.rollback();
-        const paidDate = existingPaidInvoice.paid_date
-          ? new Date(existingPaidInvoice.paid_date).toLocaleDateString('id-ID', { day:'2-digit', month:'long', year:'numeric' })
-          : '–';
-        return res.status(400).json({
-          success: false,
-          message: `${customer.name} sudah membayar untuk periode ${MONTHS[pm]} ${py} (lunas ${paidDate}). Invoice: ${existingPaidInvoice.invoice_number}`,
-          already_paid: true,
-          invoice_number: existingPaidInvoice.invoice_number,
-          paid_date: existingPaidInvoice.paid_date
-        });
-      }
-
-      // Cari atau buat invoice untuk periode ini
-      let invoice = await Invoice.findOne({
-        where: { customer_id, period_month: pm, period_year: py },
-        transaction: t
-      });
-
-      if (!invoice) {
-        // Auto-create invoice — penomoran konsisten dengan BillingController
-        // via helper terpusat getNextInvoiceNumber (MAX suffix per-periode).
-        // Dulu jalur ini pakai sequence global berbasis id sehingga bisa bentrok
-        // dengan generate batch (yang pakai per-periode) → "konflik nomor invoice".
-        const { getNextInvoiceNumber } = require('../utils/helpers');
-        const invAmount = parseFloat(customer.package?.price || amount);
-        let invoiceNumber;
-        let attempts = 0;
-        while (attempts < 8) {
-          try {
-            const { invoiceNumber: candidate, prefix: candPrefix } = await getNextInvoiceNumber(sequelize, pm, py, { transaction: t });
-            invoiceNumber = attempts === 0
-              ? candidate
-              : generateInvoiceNumber(py, pm, parseInt(candidate.split('-').pop(), 10) + attempts, candPrefix || 'INV');
-            const exists = await Invoice.findOne({ where: { invoice_number: invoiceNumber }, transaction: t });
-            if (!exists) break;
-            attempts++;
-          } catch(_) { attempts++; }
-        }
-        invoice = await Invoice.create({
-          invoice_number: invoiceNumber,
-          customer_id,
-          amount: invAmount,
-          tax: 0,
-          total: invAmount,
-          status: 'unpaid',
-          due_date: due_date_after,
-          period_month: pm,
-          period_year: py
-        }, { transaction: t });
-      }
-
       const payMethod = METHODS.includes(method) ? method : 'cash';
       const refNote = [bank, reference_no].filter(Boolean).join(' — ') || null;
+      const payDate = payment_date || moment().format('YYYY-MM-DD');
+      let currentDebt = parseFloat(customer.carry_over_amount || 0) || 0;
 
-      // Simpan payment
-      const payment = await Payment.create({
-        invoice_id: invoice.id,
-        amount: parseFloat(String(amount).replace(/[.,]/g, '') || 0) || parseFloat(amount),
-        payment_method: payMethod,
-        payment_date: payment_date || moment().format('YYYY-MM-DD'),
-        reference_number: refNote,
-        recorded_by: req.user?.id || null,
-        notes: notes || null
-      }, { transaction: t });
+      let invoice = null;
+      let payment = null;
+      let invoices = [];
+      const createdPayments = [];
+      let computedNextDue = due_date_after || customer.due_date || payDate;
+      let effectiveDueAfter = computedNextDue;
+      let newDebt = currentDebt;
+      let coverageNote = '';
 
-      // Update invoice: paid + due_date
-      await invoice.update({ status: 'paid', paid_date: payment_date || moment().format('YYYY-MM-DD') }, { transaction: t });
+      if (debtOnly) {
+        if (currentDebt <= 0) {
+          await t.rollback();
+          return res.status(400).json({ success: false, message: `${customer.name} tidak memiliki hutang` });
+        }
+        invoice = await Invoice.findOne({
+          where: { customer_id },
+          order: [['period_year', 'DESC'], ['period_month', 'DESC'], ['id', 'DESC']],
+          transaction: t
+        });
+        if (!invoice) {
+          await t.rollback();
+          return res.status(400).json({ success: false, message: 'Tidak ada invoice untuk menautkan pelunasan hutang' });
+        }
+        const debtPaid = Math.min(payAmount, currentDebt);
+        newDebt = Math.max(0, currentDebt - debtPaid);
+        coverageNote = `Pelunasan hutang Rp${debtPaid.toLocaleString('id-ID')}` +
+          (newDebt > 0 ? ` · sisa Rp${newDebt.toLocaleString('id-ID')}` : ' · lunas');
+        payment = await Payment.create({
+          invoice_id: invoice.id,
+          amount: debtPaid,
+          payment_method: payMethod,
+          payment_date: payDate,
+          reference_number: refNote,
+          recorded_by: req.user?.id || null,
+          notes: [notes, coverageNote].filter(Boolean).join(' — ')
+        }, { transaction: t });
+        createdPayments.push(payment);
+        invoices = [invoice];
+        effectiveDueAfter = customer.due_date || payDate;
+        computedNextDue = effectiveDueAfter;
+        await customer.update({ carry_over_amount: newDebt }, { transaction: t });
+      } else {
+        if (coverageMonths === 1) {
+          const existingPaidInvoice = await Invoice.findOne({
+            where: { customer_id, period_month: pm, period_year: py, status: 'paid' },
+            include: [{ model: Payment, as: 'payments', attributes: ['id','amount','payment_date'] }],
+            transaction: t
+          });
+          if (existingPaidInvoice) {
+            await t.rollback();
+            const paidDate = existingPaidInvoice.paid_date
+              ? new Date(existingPaidInvoice.paid_date).toLocaleDateString('id-ID', { day:'2-digit', month:'long', year:'numeric' })
+              : '–';
+            return res.status(400).json({
+              success: false,
+              message: `${customer.name} sudah membayar untuk periode ${MONTHS[pm]} ${py} (lunas ${paidDate}). Invoice: ${existingPaidInvoice.invoice_number}`,
+              already_paid: true,
+              invoice_number: existingPaidInvoice.invoice_number,
+              paid_date: existingPaidInvoice.paid_date
+            });
+          }
+        }
 
-      // ── Tentukan jatuh tempo BERIKUTNYA ──────────────────────────────
-      // Kebijakan: jatuh tempo berikutnya = jatuh tempo customer terkini + 1 bulan.
-      // Server menghitung sendiri (tidak mengandalkan kiriman frontend) supaya
-      // konsisten & tahan dari kasus invoice periode lama. Jika admin SENGAJA
-      // mengisi due_date_after yang berbeda dari default (override manual),
-      // nilai itu dihormati.
-      const baseDue = customer.due_date || invoice.due_date || payment_date || moment().format('YYYY-MM-DD');
-      const computedNextDue = addOneMonthKeepDay(baseDue) || due_date_after;
-      // Default yang "diharapkan" frontend = customer.due_date + 1 bulan.
-      const expectedDefault = addOneMonthKeepDay(customer.due_date || baseDue);
-      // Pakai computed (server) kecuali admin override ke tanggal lain.
-      const effectiveDueAfter =
-        (due_date_after && expectedDefault && due_date_after !== expectedDefault)
-          ? due_date_after            // admin override manual
-          : computedNextDue;          // default terhitung server
+        let cursor = { month: pm, year: py };
+        let safety = 0;
+        while (invoices.length < coverageMonths && safety < 24) {
+          safety++;
+          const inv = await findOrCreatePeriodInvoice({
+            customer,
+            customerId: customer_id,
+            month: cursor.month,
+            year: cursor.year,
+            dueDate: customer.due_date || due_date_after || payDate,
+            fallbackAmount: coverageMonths === 1 ? payAmount : 0,
+            transaction: t
+          });
+          if (inv.status !== 'paid') invoices.push(inv);
+          cursor = nextPeriod(cursor.month, cursor.year);
+        }
 
-      // Update customer: due_date BARU + status aktif.
-      // PENTING: simpan `due_date` (jatuh tempo berikutnya) ke customer supaya
-      // pesan WA berikutnya (invoice/reminder) menampilkan tgl jatuh tempo yang
-      // sudah diperbarui — bukan tanggal lama.
-      const custUpdate = {
-        status: 'active',
-        due_date: effectiveDueAfter,
-        installation_date: customer.installation_date || payment_date || moment().format('YYYY-MM-DD')
-      };
-      // Selaraskan billing_date (hari dalam bulan) dengan due_date baru, jika valid (1..28)
-      const newDueDay = moment(effectiveDueAfter).date();
-      if (newDueDay >= 1 && newDueDay <= 28) custUpdate.billing_date = newDueDay;
-      await customer.update(custUpdate, { transaction: t });
+        if (!invoices.length) {
+          await t.rollback();
+          return res.status(400).json({
+            success: false,
+            message: `${customer.name} sudah lunas untuk ${coverageLabel(coverageMonths).toLowerCase()} dari periode ${MONTHS[pm]} ${py}`,
+            already_paid: true
+          });
+        }
+
+        const invoiceTotal = invoices.reduce((s, inv) => s + (parseFloat(inv.total || 0) || 0), 0);
+        const firstInv = invoices[0];
+        const lastInv = invoices[invoices.length - 1];
+        const periodStr = invoices.length === 1
+          ? `${MONTHS[firstInv.period_month]} ${firstInv.period_year}`
+          : `${MONTHS[firstInv.period_month]} ${firstInv.period_year}–${MONTHS[lastInv.period_month]} ${lastInv.period_year}`;
+        const shortfall = Math.max(0, invoiceTotal - payAmount);
+        const leftover = Math.max(0, payAmount - invoiceTotal);
+        newDebt = currentDebt;
+        if (shortfall > 0) newDebt += shortfall;
+        else if (includeDebt || leftover > 0) newDebt = Math.max(0, currentDebt - leftover);
+
+        const debtNoteParts = [`${coverageLabel(invoices.length)} ${periodStr}`];
+        if (shortfall > 0) debtNoteParts.push(`kurang bayar Rp${shortfall.toLocaleString('id-ID')} dicatat hutang`);
+        else if (leftover > 0 && currentDebt > 0) debtNoteParts.push(`hutang berkurang Rp${Math.min(leftover, currentDebt).toLocaleString('id-ID')}`);
+        if (newDebt > 0) debtNoteParts.push(`sisa hutang Rp${newDebt.toLocaleString('id-ID')}`);
+        coverageNote = debtNoteParts.join(' · ');
+
+        let remaining = payAmount;
+        for (let i = 0; i < invoices.length; i++) {
+          const inv = invoices[i];
+          const invTotal = parseFloat(inv.total || 0) || 0;
+          const isLast = i === invoices.length - 1;
+          const thisPay = isLast ? remaining : Math.min(remaining, invTotal);
+          remaining -= thisPay;
+          if (thisPay > 0) {
+            const created = await Payment.create({
+              invoice_id: inv.id,
+              amount: thisPay,
+              payment_method: payMethod,
+              payment_date: payDate,
+              reference_number: refNote,
+              recorded_by: req.user?.id || null,
+              notes: [notes, coverageNote].filter(Boolean).join(' — ')
+            }, { transaction: t });
+            if (!payment) payment = created;
+            createdPayments.push(created);
+          }
+          await inv.update({ status: 'paid', paid_date: payDate }, { transaction: t });
+          if (!invoice) invoice = inv;
+        }
+
+        const baseDue = customer.due_date || invoice.due_date || payDate;
+        computedNextDue = addNMonthsKeepDay(baseDue, invoices.length) || due_date_after;
+        const expectedDefault = addNMonthsKeepDay(customer.due_date || baseDue, invoices.length);
+        effectiveDueAfter =
+          (due_date_after && expectedDefault && due_date_after !== expectedDefault)
+            ? due_date_after
+            : computedNextDue;
+
+        const custUpdate = {
+          status: 'active',
+          due_date: effectiveDueAfter,
+          installation_date: customer.installation_date || payDate,
+          carry_over_amount: newDebt
+        };
+        const newDueDay = moment(effectiveDueAfter).date();
+        if (newDueDay >= 1 && newDueDay <= 28) custUpdate.billing_date = newDueDay;
+        await customer.update(custUpdate, { transaction: t });
+      }
+
+      if (!payment || !invoice) {
+        await t.rollback();
+        return res.status(500).json({ success: false, message: 'Gagal membuat pembayaran' });
+      }
 
       // Jika customer terisolir, set flag restoring
       // (implementasi MikroTik restore di-trigger setelah commit di bawah)
@@ -373,7 +500,7 @@ class PaymentController {
       // (2) kegagalan komunikasi MikroTik tidak membatalkan transaction payment.
       // Kalau gagal di sini, log error tapi jangan throw — cron berikutnya
       // (atau user manual via tombol Restore) bisa retry.
-      if (customer.isolir_status === 'isolated' || customer.isolir_status === 'restoring') {
+      if (!debtOnly && (customer.isolir_status === 'isolated' || customer.isolir_status === 'restoring')) {
         const restoreCustId = customer.id;
         const restoreCustCode = customer.customer_id;
         const restoreCustName = customer.name;
@@ -390,6 +517,9 @@ class PaymentController {
         });
       }
 
+      const invoiceNumbers = invoices.map(i => i.invoice_number).filter(Boolean).join(', ') || invoice.invoice_number;
+      const notifyAmount = payAmount;
+
       // Kirim WA konfirmasi jika diminta — DIJALANKAN DI BACKGROUND (setImmediate)
       // supaya response "Catat Pembayaran" tidak menunggu koneksi/sendMessage WA
       // yang bisa makan beberapa detik. Status awal di-set di bawah, lalu
@@ -403,13 +533,13 @@ class PaymentController {
           customerId: customer.customer_id,
           customerPhone: customer.phone,
           packageName: customer.package?.name,
-          amount: payment.amount,
+          amount: notifyAmount,
           paymentDate: payment.payment_date,
           payMethod, bank,
           referenceNo: reference_no,
           dueDate: effectiveDueAfter,
-          invoiceNumber: invoice.invoice_number,
-          notes
+          invoiceNumber: invoiceNumbers,
+          notes: [notes, coverageNote].filter(Boolean).join(' — ')
         };
         setImmediate(async () => {
           let waSentStatus = 'failed';
@@ -466,17 +596,17 @@ class PaymentController {
       if (customer.email && send_email !== false && send_email !== 'false' && send_email !== 0 && send_email !== '0') {
         const emailCtx = {
           customer: { name: customer.name, customer_id: customer.customer_id, email: customer.email, address: customer.address, packageName: customer.package?.name },
-          payAmount: parseFloat(payment.amount),
+          payAmount: parseFloat(notifyAmount),
           payMethodLabel: require('../utils/paymentMethodLabel').methodLabel(payMethod, bank),
           payDateFmt: moment(payment.payment_date).format('DD/MM/YYYY'),
           dueFmt: moment(effectiveDueAfter).format('DD/MM/YYYY'),
-          invoiceNumber: invoice.invoice_number,
+          invoiceNumber: invoiceNumbers,
           referenceNo: reference_no,
-          notes,
+          notes: [notes, coverageNote].filter(Boolean).join(' — '),
           paymentId: payment.id,
-          subtotal: parseFloat(invoice.amount || payment.amount),
+          subtotal: parseFloat(notifyAmount),
           taxAmount: parseFloat(invoice.tax || 0),
-          total: parseFloat(invoice.total || payment.amount),
+          total: parseFloat(notifyAmount),
           periodMonth: invoice.period_month,
           periodYear: invoice.period_year
         };
@@ -699,31 +829,26 @@ class PaymentController {
       // ═══════════════════════════════════════════════════════════
       try {
         const { Keuangan } = require('../models');
-        
-        // Cek apakah payment ini sudah pernah di-sync
-        const existingEntry = await Keuangan.findOne({
-          where: {
-            type: 'pemasukan',
-            ref_number: `PAY-${payment.id}`
-          }
-        });
-        
-        // Jika belum ada, create entry baru di Keuangan
-        if (!existingEntry) {
-          const methodStr = require('../utils/paymentMethodLabel').methodLabel(payMethod, bank);
-          
+        const methodStr = require('../utils/paymentMethodLabel').methodLabel(payMethod, bank);
+        for (const payRow of createdPayments) {
+          const existingEntry = await Keuangan.findOne({
+            where: {
+              type: 'pemasukan',
+              ref_number: `PAY-${payRow.id}`
+            }
+          });
+          if (existingEntry) continue;
           await Keuangan.create({
             type: 'pemasukan',
             category: 'Pembayaran Pelanggan',
             description: `Pembayaran ${customer.name} (${customer.customer_id})`,
-            amount: parseFloat(payment.amount),
-            date: payment.payment_date,
-            ref_number: `PAY-${payment.id}`,
-            notes: `Invoice: ${invoice.invoice_number || '-'} | Metode: ${methodStr}${reference_no ? ' | Ref: '+reference_no : ''}`,
+            amount: parseFloat(payRow.amount),
+            date: payRow.payment_date,
+            ref_number: `PAY-${payRow.id}`,
+            notes: `Invoice: ${invoiceNumbers || '-'} | Metode: ${methodStr}${reference_no ? ' | Ref: '+reference_no : ''}${coverageNote ? ' | ' + coverageNote : ''}`,
             recorded_by: req.user?.id || null
           });
-          
-          logger.info(`[Payment] Auto-sync ke Keuangan: PAY-${payment.id} - ${customer.name}`);
+          logger.info(`[Payment] Auto-sync ke Keuangan: PAY-${payRow.id} - ${customer.name}`);
         }
       } catch(syncErr) {
         // Jangan fail payment jika sync gagal, cukup log saja
@@ -732,8 +857,16 @@ class PaymentController {
       // ═══════════════════════════════════════════════════════════
 
       const waSentMsg = waSentStatus === 'pending' ? ' Notifikasi sedang dikirim di latar belakang.' : '';
+      let successMsg;
+      if (debtOnly) {
+        successMsg = `Pelunasan hutang ${customer.name} Rp${payAmount.toLocaleString('id-ID')} berhasil.` +
+          (newDebt > 0 ? ` Sisa hutang Rp${newDebt.toLocaleString('id-ID')}.` : ' Hutang lunas.');
+      } else {
+        successMsg = `Pembayaran ${coverageLabel(invoices.length).toLowerCase()} ${customer.name} berhasil dicatat.`;
+        if (newDebt > 0) successMsg += ` Sisa hutang Rp${newDebt.toLocaleString('id-ID')}.`;
+        else if (currentDebt > 0) successMsg += ' Hutang lunas.';
+      }
 
-      // Notifikasi Telegram (event bisnis) — fire-and-forget, tidak memblok response.
       try {
         const methodLabel = require('../utils/paymentMethodLabel').methodLabel(payMethod, bank);
         let recordedByName = null;
@@ -747,12 +880,12 @@ class PaymentController {
           customerName: customer.name,
           customerCode: customer.customer_id,
           customerId: customer.id,
-          amount: parseFloat(payment.amount),
+          amount: parseFloat(notifyAmount),
           method: methodLabel,
-          invoiceNo: invoice.invoice_number,
+          invoiceNo: invoiceNumbers,
           packageName: customer.package?.name || null,
-          periodeMonth: pm,
-          periodeYear: py,
+          periodeMonth: invoices[0]?.period_month || pm,
+          periodeYear: invoices[0]?.period_year || py,
           dueDate: computedNextDue,
           recordedBy: recordedByName,
           paidAt: payment.payment_date || new Date(),
@@ -761,14 +894,17 @@ class PaymentController {
 
       res.status(201).json({
         success: true,
-        message: `Pembayaran ${customer.name} berhasil dicatat.` + waSentMsg,
+        message: successMsg + waSentMsg,
         data: {
           payment_id: payment.id,
-          invoice_number: invoice.invoice_number,
+          invoice_number: invoiceNumbers,
           customer_name: customer.name,
-          amount: payment.amount,
+          amount: notifyAmount,
           due_date_after: effectiveDueAfter,
-          wa_sent_status: waSentStatus
+          wa_sent_status: waSentStatus,
+          months: invoices.length,
+          debt_balance: newDebt,
+          coverage: coverageLabel(invoices.length)
         }
       });
     } catch(e) {
@@ -802,7 +938,9 @@ class PaymentController {
         send_email: req.body.send_email,
         notes: req.body.notes,
         period_month: req.body.period_month,
-        period_year: req.body.period_year
+        period_year: req.body.period_year,
+        months: req.body.months,
+        include_debt: req.body.include_debt
       };
 
       const origBody = req.body;
@@ -1617,7 +1755,7 @@ class PaymentController {
       const rows = await Customer.findAll({
         where,
         include: [{ model: Package, as: 'package', attributes: ['id','name','price'] }],
-        attributes: ['id','customer_id','name','phone','status','billing_date','installation_date','due_date'],
+        attributes: ['id','customer_id','name','phone','status','billing_date','installation_date','due_date','carry_over_amount'],
         order: [['name','ASC']],
         limit: 30
       });
