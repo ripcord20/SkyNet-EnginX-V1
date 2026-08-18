@@ -30,14 +30,30 @@
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; }
     .act-btn { width:30px; height:30px; border:1px solid var(--border); background:#fff; border-radius:8px; cursor:pointer; color:#64748b; }
     .act-btn.danger { color:#dc2626; }
-    .modal { display:none; position:fixed; inset:0; width:auto !important; max-width:none !important; background:rgba(15,23,42,.45); z-index:80; padding:16px; overflow:auto; }
-    .modal.show { display:block; }
-    .modal-box { background:#fff; border-radius:16px; width:100%; max-width:480px; margin:12px auto; box-shadow:0 16px 40px rgba(15,23,42,.18); }
-    .modal-hd { display:flex; justify-content:space-between; align-items:center; padding:16px 18px; border-bottom:1px solid var(--border); font-weight:800; }
-    .modal-bd { padding:16px 18px; display:flex; flex-direction:column; gap:12px; }
-    .modal-ft { padding:12px 18px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:8px; }
-    .field label { display:block; font-size:12px; font-weight:700; color:#475569; margin-bottom:5px; }
-    .field input, .field select { width:100%; padding:9px 12px; border:1px solid var(--border); border-radius:10px; font-size:13px; font-family:inherit; box-sizing:border-box; }
+    .pp-modal-overlay { display:none; position:fixed; inset:0; width:auto !important; max-width:none !important; background:rgba(0,0,0,.45); z-index:1000; align-items:center; justify-content:center; backdrop-filter:blur(3px); padding:16px; }
+    .pp-modal-overlay.show { display:flex !important; }
+    .pp-modal { background:#fff; border-radius:16px; padding:28px; width:92%; max-width:520px; max-height:92vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,.2); animation:ppIn .2s ease; }
+    @keyframes ppIn { from{opacity:0;transform:translateY(14px) scale(.97)} to{opacity:1;transform:none} }
+    .pp-modal-hdr { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
+    .pp-modal-hdr h3 { font-size:16px; font-weight:800; margin:0; color:#0f172a; }
+    .pp-modal-close { width:30px;height:30px;border-radius:8px;border:none;background:#f8fafc;cursor:pointer;font-size:18px;color:#64748b;display:flex;align-items:center;justify-content:center;transition:all .15s; }
+    .pp-modal-close:hover { background:#fee2e2; color:#dc2626; }
+    .pp-form-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    @media(max-width:480px){ .pp-form-grid { grid-template-columns:1fr; } }
+    .pp-form-group { display:flex; flex-direction:column; gap:5px; }
+    .pp-form-group.full { grid-column:1/-1; }
+    .pp-form-label { font-size:12px; font-weight:600; color:#374151; }
+    .pp-form-label span { color:#dc2626; }
+    .pp-form-control { padding:9px 12px; border:1.5px solid #e2e8f0; border-radius:9px; font-size:13px; font-family:inherit; color:#0f172a; outline:none; transition:border-color .15s,box-shadow .15s; background:#fff; width:100%; box-sizing:border-box; }
+    .pp-form-control:focus { border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.12); }
+    .pp-form-control::placeholder { color:#94a3b8; }
+    textarea.pp-form-control { min-height:72px; resize:vertical; }
+    .pp-form-hint { font-size:11px; color:#94a3b8; }
+    .pp-modal-footer { display:flex; gap:10px; justify-content:flex-end; margin-top:20px; padding-top:16px; border-top:1px solid #f1f5f9; }
+    .btn-pp-save { background:#2563eb; color:#fff; border:none; padding:10px 22px; border-radius:10px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit; transition:background .15s; }
+    .btn-pp-save:hover { background:#1d4ed8; }
+    .btn-pp-cancel { background:#f8fafc; color:#374151; border:1.5px solid #e2e8f0; padding:9px 18px; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; transition:all .15s; }
+    .btn-pp-cancel:hover { background:#f1f5f9; }
     .hint { font-size:12px; color:var(--muted); line-height:1.55; background:#f8fafc; border:1px solid var(--border); border-radius:10px; padding:10px 12px; margin-bottom:16px; }
     .empty { text-align:center; padding:48px 16px; color:var(--muted); }
     @media(max-width:700px){ .ns-cards{grid-template-columns:1fr;} .ns-card{border-right:none;border-bottom:1px solid #e8eaed;} }
@@ -87,26 +103,44 @@
   </div>
 </div>
 
-<div class="modal" id="nasModal">
-  <div class="modal-box">
-    <div class="modal-hd"><span id="nasModalTitle">NAS</span><button class="act-btn" onclick="closeModal()">✕</button></div>
-    <div class="modal-bd">
-      <input type="hidden" id="nId">
-      <div class="field"><label>IP / hostname *</label><input id="nHost" placeholder="192.168.22.1"></div>
-      <div class="field"><label>Nama pendek</label><input id="nShort" placeholder="CORE"></div>
-      <div class="field"><label>Secret *</label><input id="nSecret" placeholder="shared secret"></div>
-      <div class="field">
-        <label>Tipe</label>
-        <select id="nType">
-          <option value="mikrotik">mikrotik</option>
-          <option value="other">other</option>
+<div class="pp-modal-overlay" id="nasModal">
+  <div class="pp-modal">
+    <div class="pp-modal-hdr">
+      <h3 id="nasModalTitle">Tambah NAS</h3>
+      <button type="button" class="pp-modal-close" onclick="closeModal()">×</button>
+    </div>
+    <input type="hidden" id="nId">
+    <div class="pp-form-grid">
+      <div class="pp-form-group">
+        <label class="pp-form-label">IP / hostname <span>*</span></label>
+        <input class="pp-form-control" id="nHost" placeholder="e.g. 192.168.22.1">
+        <span class="pp-form-hint">IP router yang Auth ke RADIUS</span>
+      </div>
+      <div class="pp-form-group">
+        <label class="pp-form-label">Nama pendek</label>
+        <input class="pp-form-control" id="nShort" placeholder="e.g. CORE">
+        <span class="pp-form-hint">Opsional — label di daftar NAS</span>
+      </div>
+      <div class="pp-form-group">
+        <label class="pp-form-label">Secret <span>*</span></label>
+        <input class="pp-form-control" id="nSecret" placeholder="shared secret">
+        <span class="pp-form-hint">Sama dengan /radius add di MikroTik</span>
+      </div>
+      <div class="pp-form-group">
+        <label class="pp-form-label">Tipe</label>
+        <select class="pp-form-control" id="nType">
+          <option value="mikrotik">MikroTik</option>
+          <option value="other">Other</option>
         </select>
       </div>
-      <div class="field"><label>Deskripsi</label><input id="nDesc"></div>
+      <div class="pp-form-group full">
+        <label class="pp-form-label">Deskripsi</label>
+        <textarea class="pp-form-control" id="nDesc" placeholder="Keterangan opsional..."></textarea>
+      </div>
     </div>
-    <div class="modal-ft">
-      <button class="btn btn-outline btn-sm" onclick="closeModal()">Batal</button>
-      <button class="btn btn-blue btn-sm" onclick="saveNas()">Simpan</button>
+    <div class="pp-modal-footer">
+      <button type="button" class="btn-pp-cancel" onclick="closeModal()">Batal</button>
+      <button type="button" class="btn-pp-save" onclick="saveNas()">Simpan</button>
     </div>
   </div>
 </div>
