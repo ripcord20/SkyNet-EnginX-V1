@@ -10,10 +10,14 @@ const App = {
   init() {
     this.setDate();
     this.initSidebar();
-    this.initNotifications();
     this.initLogout();
-    this.initSocket();
     this.initSearch();
+    const later = () => {
+      this.initNotifications();
+      this.initSocket();
+    };
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(later, { timeout: 1800 });
+    else setTimeout(later, 1);
   },
 
   async api(url, options = {}) {
@@ -96,7 +100,7 @@ const App = {
     // PENTING: kecualikan tombol .nav-group-toggle (Billing & Invoice, dll) — itu untuk
     // expand/collapse submenu, bukan navigasi. Kalau ikut di-close, dropdown tidak pernah
     // sempat terlihat karena sidebar langsung tertutup.
-    sidebar.querySelectorAll('.nav-item').forEach(link => {
+    sidebar.querySelectorAll('a.nav-item, a.nav-sub').forEach(link => {
       if (link.classList.contains('nav-group-toggle')) return;
       link.addEventListener('click', () => {
         if (window.innerWidth < 768) closeSidebar();
