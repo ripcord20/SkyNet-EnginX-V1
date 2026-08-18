@@ -28,6 +28,13 @@
     </div>
     <div class="topbar-actions">
 
+      <% if (!isFinanceUser && !isSalesUser) { %>
+      <a href="/monitoring/network-health" class="nh-topbar-link" title="Kesehatan Jaringan">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        <span>Kesehatan Jaringan</span>
+      </a>
+      <% } %>
+
       <!-- Notification Bell -->
       <div class="notif-wrap" id="notifWrap">
         <button class="topbar-btn notif-bell-btn" id="notificationBtn" onclick="toggleNotifPanel()">
@@ -66,6 +73,20 @@
 
 <style>
 @media(min-width:769px){ .sidebar-toggle { display:none !important; } }
+
+.nh-topbar-link {
+  display:inline-flex; align-items:center; gap:6px;
+  height:34px; padding:0 12px; margin-right:6px;
+  border-radius:9px; text-decoration:none;
+  font-size:12px; font-weight:800; color:#1d4ed8;
+  background:#eff6ff; border:1px solid #bfdbfe;
+  white-space:nowrap;
+}
+.nh-topbar-link:hover { background:#dbeafe; color:#1e40af; }
+@media (max-width: 720px) {
+  .nh-topbar-link span { display:none; }
+  .nh-topbar-link { width:36px; padding:0; justify-content:center; }
+}
 
 /* Notification */
 .notif-wrap { position:relative; }
