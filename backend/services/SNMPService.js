@@ -1,7 +1,8 @@
 const logger = require('../utils/logger');
 const { Device, DeviceLog, TrafficData, Notification, User } = require('../models');
 const { SNMP_OIDS, DEVICE_STATUS } = require('../config/constants');
-const { parseCpuPercent } = require('../utils/mikrotikResource');
+const { sanitizeCpuRam } = require('../utils/mikrotikResource');
+const { fetchMikrotikResource, persistDeviceMetrics, canUseMikrotikApi: deviceHasMikrotikApi } = require('../utils/deviceMetrics');
 const { sanitizeSnmpValue } = require('../utils/helpers');
 const { readCpuLoad, readMemory, formatSnmpUptime, pickVarbind } = require('../utils/snmpMetrics');
 
@@ -69,45 +70,23 @@ class SNMPService {
   }
 
   canUseMikrotikApi(device) {
-    return !!(device && device.api_username
-      && ['router', 'olt'].includes(device.type));
+    return deviceHasMikrotikApi(device);
   }
 
   async pollViaMikrotikApi(device) {
-    const { MikrotikService } = require('./MikrotikService');
-    const mt = new MikrotikService({
-      host: device.ip_address,
-      port: device.api_port || 80,
-      username: device.api_username,
-      password: device.api_password || '',
-      api_protocol: device.api_protocol || null,
-      timeout: 8000
-    });
-    const res = await mt.getSystemResource();
-    if (!res) throw new Error('empty /system/resource');
-
-    const cpu = parseCpuPercent(res.cpuLoad);
-    const mem = res.totalMemory > 0
-      ? Math.round(((res.totalMemory - res.freeMemory) / res.totalMemory) * 100)
-      : 0;
     const prevStatus = device.status;
-
-    await Device.update({
-      status: DEVICE_STATUS.ONLINE,
-      cpu_load: cpu,
-      memory_usage: mem,
-      uptime: res.uptime || '',
-      firmware: res.version || device.firmware,
-      last_polled: new Date()
-    }, { where: { id: device.id } });
-    device.status = DEVICE_STATUS.ONLINE;
+    const m = await fetchMikrotikResource(device);
+    const saved = await persistDeviceMetrics(device, m);
+    const cpu = saved.cpu_load;
+    const mem = saved.memory_usage;
+    device.status = saved.status || device.status;
 
     try {
       await DeviceLog.create({
         device_id: device.id,
         cpu_load: cpu,
         memory_usage: mem,
-        uptime: res.uptime || '',
+        uptime: m.uptime || '',
         status: cpu > 90 ? 'warning' : 'online',
         polled_at: new Date()
       });
@@ -119,7 +98,7 @@ class SNMPService {
         status: 'online',
         cpu_load: cpu,
         memory_usage: mem,
-        uptime: res.uptime,
+        uptime: m.uptime,
         timestamp: new Date()
       });
       this.io.emit('monitoring:update', {
@@ -174,13 +153,14 @@ class SNMPService {
 
     try {
       const data = await this.getDeviceData(session, device);
+      const { cpu, mem } = sanitizeCpuRam(data.cpu, data.memory);
 
       // Update device status
       const prevStatus = device.status;
       await Device.update({
         status: DEVICE_STATUS.ONLINE,
-        cpu_load: parseCpuPercent(data.cpu),
-        memory_usage: data.memory || 0,
+        cpu_load: cpu,
+        memory_usage: mem,
         uptime: data.uptime || '',
         firmware: data.firmware || device.firmware,
         last_polled: new Date()
@@ -190,8 +170,8 @@ class SNMPService {
       try {
         await DeviceLog.create({
           device_id: device.id,
-          cpu_load: parseCpuPercent(data.cpu),
-          memory_usage: data.memory || 0,
+          cpu_load: cpu,
+          memory_usage: mem,
           uptime: data.uptime || '',
           status: 'online',
           interfaces: data.interfaces || null,
@@ -209,8 +189,8 @@ class SNMPService {
         this.io.to(`device_${device.id}`).emit('device:update', {
           device_id: device.id,
           status: 'online',
-          cpu_load: parseCpuPercent(data.cpu),
-          memory_usage: data.memory,
+          cpu_load: cpu,
+          memory_usage: mem,
           uptime: data.uptime,
           interfaces: data.interfaces,
           timestamp: new Date()
@@ -220,8 +200,8 @@ class SNMPService {
           device_id: device.id,
           name: device.name,
           status: 'online',
-          cpu_load: parseCpuPercent(data.cpu),
-          memory_usage: data.memory
+          cpu_load: cpu,
+          memory_usage: mem
         });
       }
 
@@ -232,9 +212,9 @@ class SNMPService {
       }
 
       // CPU overload alert
-      if (parseCpuPercent(data.cpu) > 90) {
+      if (cpu > 90) {
         await this.createAlert(device, 'cpu_overload', 'warning',
-          `CPU load on ${device.name}: ${parseCpuPercent(data.cpu)}%`);
+          `CPU load on ${device.name}: ${cpu}%`);
       }
 
     } catch (error) {

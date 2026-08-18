@@ -1,8 +1,9 @@
 const { Device, DeviceLog, TrafficData, sequelize } = require('../models');
 const { Op } = require('sequelize');
 const { paginateResponse } = require('../utils/helpers');
-const { parseCpuPercent } = require('../utils/mikrotikResource');
+const { sanitizeCpuRam } = require('../utils/mikrotikResource');
 const { forceDeleteDevice, groupDuplicatesByIp } = require('../utils/deviceCascade');
+const { sanitizeDeviceWrite, syncDeviceMetrics, startWatching } = require('../utils/deviceMetrics');
 const net = require('net');
 const logger = require('../utils/logger');
 
@@ -105,8 +106,11 @@ class DeviceController {
 
   async create(req, res) {
     try {
-      const device = await Device.create(req.body);
-      res.status(201).json({ success: true, data: device });
+      const device = await Device.create(sanitizeDeviceWrite(req.body));
+      startWatching(device);
+      await syncDeviceMetrics(device).catch(() => null);
+      const fresh = await Device.findByPk(device.id);
+      res.status(201).json({ success: true, data: fresh || device });
     } catch (error) {
       res.status(400).json({ success: false, message: error.message });
     }
@@ -133,8 +137,11 @@ class DeviceController {
     try {
       const device = await Device.findByPk(req.params.id);
       if (!device) return res.status(404).json({ success: false, message: 'Device not found' });
-      await device.update(req.body);
-      res.json({ success: true, data: device });
+      await device.update(sanitizeDeviceWrite(req.body));
+      startWatching(device);
+      await syncDeviceMetrics(device).catch(() => null);
+      const fresh = await Device.findByPk(device.id);
+      res.json({ success: true, data: fresh || device });
     } catch (error) {
       res.status(400).json({ success: false, message: error.message });
     }
@@ -489,17 +496,20 @@ class DeviceController {
 
           // Update status & last_polled kalau sukses
           if (result.resource) {
+            const memPct = result.resource.totalMemory > 0
+              ? Math.round(((result.resource.totalMemory - result.resource.freeMemory) / result.resource.totalMemory) * 100)
+              : 0;
+            const { cpu, mem } = sanitizeCpuRam(result.resource.cpuLoad, memPct);
             await device.update({
               status: 'online',
-              cpu_load: parseCpuPercent(result.resource.cpuLoad),
-              memory_usage: result.resource.totalMemory > 0
-                ? Math.round(((result.resource.totalMemory - result.resource.freeMemory) / result.resource.totalMemory) * 100)
-                : 0,
+              cpu_load: cpu,
+              memory_usage: mem,
               uptime: result.resource.uptime,
               firmware: result.resource.version,
               last_polled: new Date()
             });
             result.device.status = 'online';
+            result.resource.cpuLoad = cpu;
           }
         } catch (e) {
           result.errors.push({ step: 'mikrotik', error: e.message });

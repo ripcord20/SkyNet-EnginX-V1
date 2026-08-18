@@ -771,10 +771,11 @@
         <div class="field">
           <label class="field-label">Metode Monitoring</label>
           <select id="devMonType" onchange="onMonTypeChange()">
-            <option value="snmp">SNMP saja</option>
-            <option value="api">API saja (MikroTik)</option>
+            <option value="api" selected>API saja (MikroTik REST / WinBox)</option>
             <option value="both">SNMP + API</option>
+            <option value="snmp">SNMP saja</option>
           </select>
+          <div class="field-hint">Untuk MikroTik pilih <strong>API</strong>. SNMP OID health.14 adalah frekuensi CPU (1400 MHz), bukan beban — itu yang tampil 100%.</div>
         </div>
 
         <!-- SNMP fields -->
@@ -799,7 +800,7 @@
         </div>
 
         <!-- API fields -->
-        <div id="apiFields" class="cond-hide">
+        <div id="apiFields">
           <div class="field">
             <label class="field-label">Protokol API</label>
             <select id="devApiProtocol" onchange="onApiProtocolChange()">
@@ -1199,14 +1200,14 @@
     document.getElementById('devModel').value = '';
     document.getElementById('devLocation').value = '';
     document.getElementById('devPopId').value = '';
-    document.getElementById('devMonType').value = 'snmp';
+    document.getElementById('devMonType').value = 'api';
     document.getElementById('devSnmpCommunity').value = 'public';
     document.getElementById('devSnmpVersion').value = '2';
     document.getElementById('devSnmpPort').value = '161';
     document.getElementById('devApiUser').value = '';
     document.getElementById('devApiPass').value = '';
     document.getElementById('devApiPort').value = '80';
-    document.getElementById('devApiProtocol').value = 'rest-http';
+    document.getElementById('devApiProtocol').value = 'rest';
     document.getElementById('devNotes').value = '';
     hideTestResult();
     onMonTypeChange();
@@ -1543,8 +1544,15 @@
             const mem = r.totalMemory > 0
               ? Math.round(((r.totalMemory - r.freeMemory) / r.totalMemory) * 100)
               : 0;
-            d.cpu_load = r.cpuLoad;
-            d.memory_usage = mem;
+            const cpu = (function () {
+              const n = parseFloat(r.cpuLoad);
+              if (!Number.isFinite(n) || n < 0 || n > 100) return 0;
+              return Math.round(n);
+            })();
+            if (!(cpu === 100 && mem === 0)) {
+              d.cpu_load = cpu;
+              d.memory_usage = mem;
+            }
             if (r.uptime) d.uptime = r.uptime;
             d.status = 'online';
             seenIp[ip] = d;

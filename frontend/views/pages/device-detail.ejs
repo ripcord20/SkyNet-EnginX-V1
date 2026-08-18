@@ -722,7 +722,11 @@
       return;
     }
 
-    const cpu = r.cpuLoad || 0;
+    const cpu = (function () {
+      const n = parseFloat(r.cpuLoad);
+      if (!Number.isFinite(n) || n < 0 || n > 100) return 0;
+      return Math.round(n);
+    })();
     document.getElementById('gaugeCpuVal').textContent = cpu + '%';
     setGauge('gaugeCpu', cpu);
 
