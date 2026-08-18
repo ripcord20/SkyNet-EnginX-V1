@@ -7,12 +7,6 @@ const axios = require('axios');
 const logger = require('../utils/logger');
 const { MikrotikApiClient } = require('./MikrotikApiClient');
 const { parseResource, unwrapRestData, unwrapSingleton, mapInterfaceRow } = require('../utils/mikrotikResource');
-const {
-  buildWgInterfaceBody,
-  buildWgPeerBody,
-  mikrotikCreatePlan,
-  asMikrotikList,
-} = require('../utils/mikrotikWireguard');
 
 /**
  * Port → protokol detection (FALLBACK MODE — dipakai kalau caller tidak
@@ -707,110 +701,6 @@ class MikrotikService {
   async getInterfaces() {
     const ifaces = await this.get('/interface');
     return (Array.isArray(ifaces) ? ifaces : []).map(mapInterfaceRow);
-  }
-
-  // ── WireGuard ──────────────────────────────────────────────
-  _mapWgIface(i) {
-    const flag = v => v === true || v === 'true' || v === 'yes';
-    return {
-      id: i['.id'],
-      name: i.name || '',
-      listenPort: i['listen-port'] || '',
-      publicKey: i['public-key'] || '',
-      privateKey: i['private-key'] || '',
-      mtu: i.mtu || '',
-      running: flag(i.running),
-      disabled: flag(i.disabled),
-      comment: i.comment || '',
-    };
-  }
-  _mapWgPeer(p) {
-    const flag = v => v === true || v === 'true' || v === 'yes';
-    return {
-      id: p['.id'],
-      interface: p.interface || '',
-      publicKey: p['public-key'] || '',
-      privateKey: p['private-key'] || '',
-      allowedAddress: p['allowed-address'] || '',
-      endpointAddress: p['endpoint-address'] || '',
-      endpointPort: p['endpoint-port'] || '',
-      currentEndpoint: p['current-endpoint-address'] || '',
-      lastHandshake: p['last-handshake'] || '',
-      rx: parseInt(p.rx) || 0,
-      tx: parseInt(p.tx) || 0,
-      keepalive: p['persistent-keepalive'] || '',
-      comment: p.comment || '',
-      disabled: flag(p.disabled),
-    };
-  }
-  /**
-   * Tambah item di collection RouterOS.
-   * PUT = REST add / binary /add. POST collection tanpa /add BUKAN add
-   * (binary mengirim command path mentah → gagal). Fallback POST .../add
-   * untuk REST yang hanya menerima command-style.
-   */
-  async _createItem(collectionPath, body) {
-    const plan = mikrotikCreatePlan(collectionPath);
-    try {
-      return await this.put(plan.primary.path, body);
-    } catch (e) {
-      try {
-        return await this.post(plan.fallback.path, body);
-      } catch (e2) {
-        throw new Error(e.message || e2.message);
-      }
-    }
-  }
-
-  async getWireGuardInterfaces() {
-    const rows = await this.get('/interface/wireguard');
-    return asMikrotikList(rows).map(r => this._mapWgIface(r));
-  }
-  async getWireGuardPeers() {
-    const rows = await this.get('/interface/wireguard/peers');
-    return asMikrotikList(rows).map(r => this._mapWgPeer(r));
-  }
-  async createWireGuardInterface(data = {}) {
-    const body = buildWgInterfaceBody(data);
-    if (!body.name) throw new Error('Nama interface wajib diisi');
-    return this._createItem('/interface/wireguard', body);
-  }
-  async updateWireGuardInterface(id, data = {}) {
-    const enc = encodeURIComponent(id);
-    const body = {};
-    if (data.name != null) body.name = String(data.name).trim();
-    if (data.listenPort != null || data['listen-port'] != null) body['listen-port'] = String(data.listenPort || data['listen-port'] || '');
-    if (data.mtu != null && String(data.mtu).trim()) body.mtu = String(data.mtu).trim();
-    if (data.comment != null) body.comment = data.comment;
-    if (data.disabled != null) body.disabled = data.disabled ? 'true' : 'false';
-    try { return await this.patch(`/interface/wireguard/${enc}`, body); }
-    catch (e) { return this.post(`/interface/wireguard/${enc}/set`, body); }
-  }
-  async deleteWireGuardInterface(id) {
-    return this.delete(`/interface/wireguard/${encodeURIComponent(id)}`);
-  }
-  async createWireGuardPeer(data = {}) {
-    const body = buildWgPeerBody(data);
-    if (!body.interface) throw new Error('Interface wajib dipilih');
-    if (!body['public-key']) throw new Error('Public key peer wajib diisi');
-    return this._createItem('/interface/wireguard/peers', body);
-  }
-  async updateWireGuardPeer(id, data = {}) {
-    const enc = encodeURIComponent(id);
-    const body = {};
-    if (data.interface != null) body.interface = data.interface;
-    if (data.publicKey != null || data['public-key'] != null) body['public-key'] = data.publicKey || data['public-key'];
-    if (data.allowedAddress != null || data['allowed-address'] != null) body['allowed-address'] = data.allowedAddress || data['allowed-address'] || '';
-    if (data.endpointAddress != null || data['endpoint-address'] != null) body['endpoint-address'] = data.endpointAddress || data['endpoint-address'] || '';
-    if (data.endpointPort != null || data['endpoint-port'] != null) body['endpoint-port'] = String(data.endpointPort || data['endpoint-port'] || '');
-    if (data.keepalive != null || data['persistent-keepalive'] != null) body['persistent-keepalive'] = data.keepalive || data['persistent-keepalive'] || '';
-    if (data.comment != null) body.comment = data.comment;
-    if (data.disabled != null) body.disabled = data.disabled ? 'true' : 'false';
-    try { return await this.patch(`/interface/wireguard/peers/${enc}`, body); }
-    catch (e) { return this.post(`/interface/wireguard/peers/${enc}/set`, body); }
-  }
-  async deleteWireGuardPeer(id) {
-    return this.delete(`/interface/wireguard/peers/${encodeURIComponent(id)}`);
   }
 
   // ── IP SCAN (Tools > IP Scan) ──────────────────────────────
