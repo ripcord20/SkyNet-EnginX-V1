@@ -44,6 +44,25 @@
     .btn-sm     { padding:6px 12px; font-size:12px; border-radius:8px; }
     .btn:disabled { opacity:.5; cursor:not-allowed; pointer-events:none; }
 
+    .dup-banner {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 0 0 16px;
+      padding: 12px 16px;
+      border-radius: 12px;
+      background: #fff7ed;
+      border: 1px solid #fdba74;
+      color: #9a3412;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .dup-banner.is-on { display: flex; }
+    .dup-banner p { margin: 0; font-weight: 500; color: #7c2d12; }
+    .dup-banner strong { font-weight: 800; }
+
     /* Live chip */
     .live-chip { display:inline-flex; align-items:center; gap:6px; padding:6px 14px; border-radius:20px; font-size:12px; font-weight:700; }
     .chip-idle { background:#f1f5f9; border:1px solid var(--border); color:var(--muted); }
@@ -516,11 +535,19 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
             Refresh
           </button>
+          <button class="btn btn-red btn-sm" id="purgeDupBtn" onclick="purgeDuplicates()" style="display:none">
+            Hapus duplikat
+          </button>
           <button class="btn btn-blue btn-sm" onclick="openAddDevice()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             Tambah Device
           </button>
         </div>
+      </div>
+
+      <div class="dup-banner" id="dupBanner">
+        <p><strong>Device duplikat.</strong> Ada lebih dari satu baris dengan IP yang sama. CPU 100% / RAM 0% biasanya data SNMP yang salah — hapus salinan ekstra, sisakan 1 router.</p>
+        <button class="btn btn-red btn-sm" onclick="purgeDuplicates()">Hapus duplikat</button>
       </div>
 
       <!-- STAT CARDS -->
@@ -744,10 +771,11 @@
         <div class="field">
           <label class="field-label">Metode Monitoring</label>
           <select id="devMonType" onchange="onMonTypeChange()">
-            <option value="snmp">SNMP saja</option>
-            <option value="api">API saja (MikroTik)</option>
+            <option value="api" selected>API saja (MikroTik REST / WinBox)</option>
             <option value="both">SNMP + API</option>
+            <option value="snmp">SNMP saja</option>
           </select>
+          <div class="field-hint">Untuk MikroTik pilih <strong>API</strong>. SNMP OID health.14 adalah frekuensi CPU (1400 MHz), bukan beban — itu yang tampil 100%.</div>
         </div>
 
         <!-- SNMP fields -->
@@ -772,7 +800,7 @@
         </div>
 
         <!-- API fields -->
-        <div id="apiFields" class="cond-hide">
+        <div id="apiFields">
           <div class="field">
             <label class="field-label">Protokol API</label>
             <select id="devApiProtocol" onchange="onApiProtocolChange()">
@@ -832,6 +860,7 @@
   var _DEVICES     = [];          // semua device hasil fetch
   var _STATUS_FILT = 'all';       // filter stat card: all|online|offline|warning
   var _REFRESH_INT = null;
+  var _LIVE_SYNCING = false;
 
   // ── Escape helper (XSS-safe rendering) ──
   function esc(v) {
@@ -853,6 +882,8 @@
       if (listRes?.success) {
         _DEVICES = listRes.data || [];
         applyFilter();
+        updateDupBanner();
+        refreshLiveMetrics();
       }
       setLive('live');
     } catch (err) {
@@ -927,7 +958,14 @@
     return esc(s);
   }
 
-  // CPU/RAM 0–100 saja. 1400 (cpu-frequency) jangan ditampilkan sebagai %
+  // CPU/RAM 0–100 saja. 1400 (cpu-frequency) jangan ditampilkan sebagai %.
+  // Pola 100% CPU + 0% RAM adalah jejak SNMP OID yang salah (bukan beban nyata).
+  function isBogusMetrics(d) {
+    const cpu = parseFloat(d && d.cpu_load);
+    const mem = parseFloat(d && d.memory_usage);
+    return Number.isFinite(cpu) && cpu === 100 && Number.isFinite(mem) && mem === 0;
+  }
+
   function sanePct(v) {
     const n = parseFloat(v);
     if (!Number.isFinite(n) || n < 0 || n > 100) return null;
@@ -967,8 +1005,9 @@
     }
 
     tbody.innerHTML = list.map(d => {
-      const cpu = sanePct(d.cpu_load);
-      const mem = sanePct(d.memory_usage);
+      const bogus = isBogusMetrics(d);
+      const cpu = bogus ? null : sanePct(d.cpu_load);
+      const mem = bogus ? null : sanePct(d.memory_usage);
 
       const cpuHtml = cpu != null ? `
         <div class="metric-bar">
@@ -1040,8 +1079,9 @@
     }
 
     wrap.innerHTML = list.map(d => {
-      const cpu = sanePct(d.cpu_load);
-      const mem = sanePct(d.memory_usage);
+      const bogus = isBogusMetrics(d);
+      const cpu = bogus ? null : sanePct(d.cpu_load);
+      const mem = bogus ? null : sanePct(d.memory_usage);
       const status = d.status || 'offline';
       const type = d.type || 'other';
       const brandLine = [d.brand, d.model].filter(Boolean).join(' · ');
@@ -1160,14 +1200,14 @@
     document.getElementById('devModel').value = '';
     document.getElementById('devLocation').value = '';
     document.getElementById('devPopId').value = '';
-    document.getElementById('devMonType').value = 'snmp';
+    document.getElementById('devMonType').value = 'api';
     document.getElementById('devSnmpCommunity').value = 'public';
     document.getElementById('devSnmpVersion').value = '2';
     document.getElementById('devSnmpPort').value = '161';
     document.getElementById('devApiUser').value = '';
     document.getElementById('devApiPass').value = '';
     document.getElementById('devApiPort').value = '80';
-    document.getElementById('devApiProtocol').value = 'rest-http';
+    document.getElementById('devApiProtocol').value = 'rest';
     document.getElementById('devNotes').value = '';
     hideTestResult();
     onMonTypeChange();
@@ -1460,11 +1500,91 @@
     box.innerHTML = html;
   }
 
+  // ── Duplicate IP banner ──
+  function duplicateIpCount() {
+    const map = {};
+    _DEVICES.forEach(d => {
+      const ip = String(d.ip_address || '').trim();
+      if (!ip) return;
+      map[ip] = (map[ip] || 0) + 1;
+    });
+    return Object.values(map).filter(n => n > 1).reduce((a, n) => a + n, 0);
+  }
+
+  function updateDupBanner() {
+    const n = duplicateIpCount();
+    const banner = document.getElementById('dupBanner');
+    const btn = document.getElementById('purgeDupBtn');
+    if (banner) banner.classList.toggle('is-on', n > 0);
+    if (btn) btn.style.display = n > 0 ? '' : 'none';
+  }
+
+  async function refreshLiveMetrics() {
+    if (_LIVE_SYNCING || !_DEVICES.length) return;
+    const targets = _DEVICES.filter(d => d.type === 'router' || d.type === 'olt');
+    if (!targets.length) return;
+    _LIVE_SYNCING = true;
+    try {
+      // Satu per satu supaya tidak menabrak REST router yang sama (duplikat IP).
+      const seenIp = {};
+      for (const d of targets) {
+        const ip = String(d.ip_address || '');
+        if (seenIp[ip]) {
+          // Salin metrik dari baris yang sudah di-sync (IP sama = hardware sama).
+          const src = seenIp[ip];
+          d.cpu_load = src.cpu_load;
+          d.memory_usage = src.memory_usage;
+          d.uptime = src.uptime;
+          continue;
+        }
+        try {
+          const res = await App.api('/devices/' + d.id + '/live-data');
+          const r = res && res.data && res.data.resource;
+          if (r) {
+            const mem = r.totalMemory > 0
+              ? Math.round(((r.totalMemory - r.freeMemory) / r.totalMemory) * 100)
+              : 0;
+            const cpu = (function () {
+              const n = parseFloat(r.cpuLoad);
+              if (!Number.isFinite(n) || n < 0 || n > 100) return 0;
+              return Math.round(n);
+            })();
+            if (!(cpu === 100 && mem === 0)) {
+              d.cpu_load = cpu;
+              d.memory_usage = mem;
+            }
+            if (r.uptime) d.uptime = r.uptime;
+            d.status = 'online';
+            seenIp[ip] = d;
+          }
+        } catch (_) { /* biarkan angka DB */ }
+      }
+      applyFilter();
+    } finally {
+      _LIVE_SYNCING = false;
+    }
+  }
+
+  async function purgeDuplicates() {
+    if (!confirm('Hapus device duplikat (IP sama)?\n\nSatu baris (yang online/terbaru) tetap ada. Data Kesehatan Jaringan pada salinan ekstra ikut dihapus.')) return;
+    try {
+      const res = await App.api('/devices/purge-duplicates', { method: 'POST' });
+      if (res?.success) {
+        App.showToast(res.message || 'Duplikat dihapus', 'success');
+        await loadDeviceList(true);
+      } else {
+        App.showToast(res?.message || 'Gagal menghapus duplikat', 'error');
+      }
+    } catch (e) {
+      App.showToast('Error: ' + e.message, 'error');
+    }
+  }
+
   // ── Delete ──
   async function deleteDevice(id) {
     const d = _DEVICES.find(x => x.id === id);
     if (!d) return;
-    if (!confirm(`Hapus device "${d.name}"?\n\nSemua log & traffic data terkait juga akan terhapus.`)) return;
+    if (!confirm(`Hapus device "${d.name}"?\n\nData terkait (Kesehatan Jaringan, log, traffic) ikut dibersihkan.`)) return;
 
     // Hapus dari UI dulu supaya row langsung hilang (tidak menunggu round-trip).
     const prev = _DEVICES.slice();

@@ -91,8 +91,8 @@ module.exports = {
     HR_STORAGE_TABLE: '1.3.6.1.2.1.25.2.3.1',
     MEMORY_TOTAL: '1.3.6.1.4.1.14988.1.1.1.1.0',
     MEMORY_USED: '1.3.6.1.4.1.14988.1.1.1.2.0',
-    // Legacy / salah kaprah: mtxrHealth.14 = fan speed, BUKAN CPU.
-    // Disimpan supaya pemanggil lama tidak crash; jangan dipakai untuk cpu_load.
+    // Legacy: mtxrHlProcessorFrequency (MHz), BUKAN CPU load.
+    // RB4011 = 1400. Jangan dipakai untuk cpu_load.
     MT_CPU_LOAD: '1.3.6.1.4.1.14988.1.1.3.14.0',
     MT_TOTAL_MEMORY: '1.3.6.1.2.1.25.2.3.1.5.65536',
     MT_USED_MEMORY: '1.3.6.1.2.1.25.2.3.1.6.65536',

@@ -7,6 +7,8 @@ const {
   parseResource,
   unwrapRestData,
   formatSnmpUptime,
+  pickCpuLoad,
+  sanitizeCpuRam,
 } = require('../utils/mikrotikResource');
 
 // REST v7: /system/resource sering array
@@ -26,7 +28,14 @@ const restArray = [{
 
 assert.strictEqual(parseCpuPercent('36'), 36);
 assert.strictEqual(parseCpuPercent(0), 0);
+assert.strictEqual(parseCpuPercent('36%'), 36);
 assert.strictEqual(parseCpuPercent('1400'), 0, 'cpu-frequency tidak boleh jadi CPU %');
+assert.strictEqual(pickCpuLoad({ 'cpu-frequency': '1400' }), 0, 'jangan pakai frequency');
+assert.strictEqual(pickCpuLoad({ 'cpu-load': '36', 'cpu-frequency': '1400' }), 36);
+assert.strictEqual(pickCpuLoad({ cpuLoad: 42 }), 42);
+assert.strictEqual(pickCpuLoad([{ load: '10%' }, { load: '50%' }]), 30);
+assert.deepStrictEqual(sanitizeCpuRam(100, 0), { cpu: 0, mem: 0, bogus: true });
+assert.deepStrictEqual(sanitizeCpuRam(36, 80), { cpu: 36, mem: 80, bogus: false });
 assert.strictEqual(parseCpuPercent(-1), 0);
 assert.strictEqual(parseCpuPercent(''), 0);
 

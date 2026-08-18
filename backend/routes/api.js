@@ -2090,6 +2090,7 @@ router.get('/devices/stats', authenticate, demoGuard, DeviceController.stats);
 router.get('/devices/monitoring', authenticate, demoGuard, DeviceController.monitoringOverview);
 router.get('/devices/mikrotik-list', authenticate, demoGuard, DeviceController.mikrotikList);
 router.post('/devices/test', authenticate, demoGuard, DeviceController.testConnectionByConfig);
+router.post('/devices/purge-duplicates', authenticate, demoGuard, hasPermission('device_delete'), logActivity('delete', 'device'), DeviceController.purgeDuplicates);
 router.get('/devices/:id', authenticate, demoGuard, DeviceController.show);
 router.get('/devices/:id/traffic', authenticate, demoGuard, DeviceController.trafficData);
 router.get('/devices/:id/interfaces', authenticate, demoGuard, DeviceController.interfaces);

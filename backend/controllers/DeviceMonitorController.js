@@ -8,7 +8,7 @@ const { Device, DeviceLog, TrafficData, sequelize } = require('../models');
 const { Op }   = require('sequelize');
 const { getMikrotikInstance } = require('../services/MikrotikService');
 const { SNMP_OIDS } = require('../config/constants');
-const { parseCpuPercent } = require('../utils/mikrotikResource');
+const { sanitizeCpuRam } = require('../utils/mikrotikResource');
 const { readCpuLoad, readMemory, formatSnmpUptime, pickVarbind, snmpText } = require('../utils/snmpMetrics');
 
 let snmp;
@@ -76,11 +76,11 @@ exports.realtimeMetrics = async (req, res) => {
     // Save to DB log (async, don't wait)
     _saveLog(device.id, metrics);
 
-    // Update device status
-    const cpu = parseCpuPercent(metrics.cpu);
+    // Update device status — jangan simpan jejak SNMP 100%/0%
+    const { cpu, mem } = sanitizeCpuRam(metrics.cpu, metrics.memPercent);
     await device.update({
       cpu_load:     cpu,
-      memory_usage: metrics.memPercent,
+      memory_usage: mem,
       uptime:       metrics.uptime,
       status:       metrics.reachable ? (cpu > 90 ? 'warning' : 'online') : 'offline',
       last_polled:  new Date()
@@ -425,12 +425,13 @@ async function _getMikrotikInterfaces(device) {
 
 async function _saveLog(deviceId, metrics) {
   try {
+    const { cpu, mem } = sanitizeCpuRam(metrics.cpu, metrics.memPercent);
     await DeviceLog.create({
       device_id:    deviceId,
-      cpu_load:     parseCpuPercent(metrics.cpu),
-      memory_usage: metrics.memPercent,
+      cpu_load:     cpu,
+      memory_usage: mem,
       uptime:       metrics.uptime,
-      status:       metrics.reachable ? (parseCpuPercent(metrics.cpu) > 90 ? 'warning' : 'online') : 'offline',
+      status:       metrics.reachable ? (cpu > 90 ? 'warning' : 'online') : 'offline',
       interfaces:   metrics.interfaces,
       raw_data: {
         diskPercent:  metrics.diskPercent,
@@ -490,7 +491,14 @@ exports.createDevice = async (req, res) => {
       status:          'offline'
     });
 
-    res.status(201).json({ success: true, data: device, message: 'Device berhasil ditambahkan' });
+    try {
+      const { startWatching, syncDeviceMetrics } = require('../utils/deviceMetrics');
+      startWatching(device);
+      await syncDeviceMetrics(device);
+    } catch (_) {}
+
+    const fresh = await Device.findByPk(device.id);
+    res.status(201).json({ success: true, data: fresh || device, message: 'Device berhasil ditambahkan' });
   } catch(e) {
     res.status(400).json({ success: false, message: e.message });
   }

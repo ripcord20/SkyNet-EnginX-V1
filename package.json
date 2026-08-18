@@ -8,6 +8,7 @@
     "dev": "nodemon backend/server.js",
     "seed": "node backend/seeds/index.js",
     "migrate": "npx sequelize-cli db:migrate",
+    "vps-update": "bash scripts/vps-update.sh",
     "build:css": "npx tailwindcss -i frontend/public/css/input.css -o frontend/public/css/output.css --watch"
   },
   "dependencies": {
