@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="id" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title><%= title %> - <%= appName %></title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/app.css">
+  <style>
+    :root {
+      --nh-bg:#f0f4f8; --nh-card:#fff; --nh-border:#e2e8f0; --nh-text:#1e293b;
+      --nh-muted:#64748b; --nh-panel:#f8fafc; --nh-blue:#1e78ff; --nh-ok:#16a34a;
+      --nh-warn:#d97706; --nh-crit:#dc2626;
+    }
+    body { background:var(--nh-bg); color:var(--nh-text); font-family:'DM Sans',sans-serif; }
+    .nh-wrap { max-width:1400px; margin:0 auto; }
+    .nh-hdr {
+      display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px;
+      background:var(--nh-card); border:1px solid var(--nh-border); border-radius:14px;
+      padding:16px 20px; margin-bottom:16px; box-shadow:0 1px 4px rgba(0,0,0,.04);
+    }
+    .nh-hdr-l { display:flex; align-items:center; gap:12px; }
+    .nh-ico {
+      width:42px; height:42px; border-radius:11px; flex-shrink:0;
+      background:linear-gradient(135deg,#1e78ff,#0052cc);
+      display:flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(30,120,255,.3);
+    }
+    .nh-hdr h1 { font-size:17px; font-weight:800; margin:0 0 2px; letter-spacing:-.3px; }
+    .nh-hdr p { font-size:12px; color:var(--nh-muted); margin:0; }
+    .nh-hdr-r { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+
+    .nh-switch { display:flex; align-items:center; gap:10px; padding:6px 8px 6px 14px; border:1.5px solid var(--nh-border); border-radius:999px; background:var(--nh-panel); }
+    .nh-switch span.lbl { font-size:12px; font-weight:800; letter-spacing:.3px; }
+    .nh-switch.off span.lbl { color:var(--nh-muted); }
+    .nh-switch.on span.lbl { color:var(--nh-ok); }
+    .nh-tog { position:relative; width:52px; height:28px; border-radius:999px; border:none; cursor:pointer; background:#cbd5e1; transition:background .2s; }
+    .nh-tog::after { content:''; position:absolute; top:3px; left:3px; width:22px; height:22px; border-radius:50%; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.2); transition:transform .2s; }
+    .nh-switch.on .nh-tog { background:var(--nh-ok); }
+    .nh-switch.on .nh-tog::after { transform:translateX(24px); }
+    .nh-tog-txt { font-size:11px; font-weight:800; min-width:28px; }
+
+    .nh-btn { padding:8px 12px; border-radius:8px; border:1.5px solid var(--nh-border); background:#fff; font-size:12px; font-weight:700; cursor:pointer; color:var(--nh-text); }
+    .nh-btn:hover { border-color:var(--nh-blue); color:var(--nh-blue); }
+    .nh-btn:disabled { opacity:.5; cursor:not-allowed; }
+    .nh-select { padding:7px 10px; border-radius:8px; border:1.5px solid var(--nh-border); background:#fff; font-size:12px; font-weight:600; }
+
+    .nh-off {
+      background:var(--nh-card); border:1px dashed #cbd5e1; border-radius:14px;
+      padding:48px 24px; text-align:center; color:var(--nh-muted);
+    }
+    .nh-off h2 { color:var(--nh-text); font-size:18px; margin:0 0 8px; }
+    .nh-off p { max-width:560px; margin:0 auto 18px; line-height:1.6; font-size:13px; }
+
+    .nh-kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:14px; }
+    .nh-kpi { background:var(--nh-card); border:1px solid var(--nh-border); border-radius:12px; padding:14px 16px; }
+    .nh-kpi .k { font-size:11px; font-weight:700; color:var(--nh-muted); text-transform:uppercase; letter-spacing:.4px; }
+    .nh-kpi .v { font-size:22px; font-weight:800; margin-top:4px; font-family:'JetBrains Mono',monospace; }
+    .nh-kpi .s { font-size:11px; color:var(--nh-muted); margin-top:2px; }
+
+    .nh-tiers { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:14px; }
+    .nh-tier { background:var(--nh-card); border:1px solid var(--nh-border); border-radius:12px; padding:14px 16px; }
+    .nh-tier h3 { margin:0 0 8px; font-size:13px; font-weight:800; display:flex; align-items:center; gap:8px; }
+    .nh-badge { font-size:10px; font-weight:800; padding:2px 7px; border-radius:999px; }
+    .nh-badge.t1 { background:#dbeafe; color:#1d4ed8; }
+    .nh-badge.t2 { background:#fef3c7; color:#b45309; }
+    .nh-badge.t3 { background:#ede9fe; color:#6d28d9; }
+    .nh-tier ul { margin:0; padding:0; list-style:none; }
+    .nh-tier li { display:flex; justify-content:space-between; gap:8px; font-size:12px; padding:5px 0; border-bottom:1px solid #f1f5f9; }
+    .nh-tier li:last-child { border-bottom:none; }
+    .nh-tier li span.ok { color:var(--nh-ok); font-weight:700; }
+    .nh-tier li span.warn { color:var(--nh-warn); font-weight:700; }
+    .nh-tier li span.crit { color:var(--nh-crit); font-weight:700; }
+    .nh-tier li span.mute { color:var(--nh-muted); }
+
+    .nh-card { background:var(--nh-card); border:1px solid var(--nh-border); border-radius:12px; margin-bottom:14px; overflow:hidden; }
+    .nh-card-h { padding:12px 16px; border-bottom:1px solid var(--nh-border); display:flex; justify-content:space-between; align-items:center; }
+    .nh-card-h h3 { margin:0; font-size:13px; font-weight:800; }
+    .nh-meta { font-size:11px; color:var(--nh-muted); }
+
+    table.nh-tbl { width:100%; border-collapse:collapse; font-size:12px; }
+    table.nh-tbl th { text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.4px; color:var(--nh-muted); padding:8px 10px; background:var(--nh-panel); }
+    table.nh-tbl td { padding:9px 10px; border-top:1px solid #f1f5f9; vertical-align:middle; }
+    table.nh-tbl tr:hover td { background:#f8fbff; }
+    .st { display:inline-flex; align-items:center; gap:5px; font-weight:700; font-size:11px; }
+    .st::before { content:''; width:7px; height:7px; border-radius:50%; background:currentColor; }
+    .st.online { color:var(--nh-ok); }
+    .st.offline { color:var(--nh-crit); }
+    .st.warning { color:var(--nh-warn); }
+    .st.unknown { color:var(--nh-muted); }
+    .mono { font-family:'JetBrains Mono',monospace; font-size:11px; }
+    .chip { display:inline-block; font-size:10px; font-weight:700; padding:1px 6px; border-radius:6px; background:#f1f5f9; color:#475569; }
+    .alerts { color:var(--nh-warn); font-size:11px; max-width:220px; }
+
+    .nh-svc { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; padding:14px 16px; }
+    .svc { border:1px solid var(--nh-border); border-radius:10px; padding:10px 12px; }
+    .svc b { display:block; font-size:12px; margin-bottom:4px; }
+    .svc p { margin:0; font-size:11px; color:var(--nh-muted); line-height:1.45; }
+
+    .nh-flow { padding:0 16px 14px; }
+    .nh-flow table { width:100%; font-size:12px; border-collapse:collapse; }
+    .nh-flow td, .nh-flow th { padding:6px 8px; text-align:left; border-bottom:1px solid #f1f5f9; }
+    .nh-hint { font-size:11px; color:var(--nh-muted); padding:0 16px 12px; }
+
+    .nh-checks { display:flex; gap:8px; align-items:center; font-size:12px; }
+    .nh-checks label { display:flex; align-items:center; gap:5px; cursor:pointer; font-weight:600; color:var(--nh-muted); }
+
+    @media (max-width: 980px) {
+      .nh-kpis, .nh-tiers, .nh-svc { grid-template-columns:1fr 1fr; }
+    }
+    @media (max-width: 640px) {
+      .nh-kpis, .nh-tiers, .nh-svc { grid-template-columns:1fr; }
+      .nh-tbl-wrap { overflow-x:auto; }
+    }
+  </style>
+</head>
+<body>
+<div class="app-layout">
+  <%- include('../partials/sidebar') %>
+  <div class="main-content">
+    <%- include('../partials/topbar') %>
+    <main class="page-content">
+      <div class="nh-wrap">
+        <div class="nh-hdr">
+          <div class="nh-hdr-l">
+            <div class="nh-ico">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+            </div>
+            <div>
+              <h1>Network Health Monitor</h1>
+              <p>Latensi, packet loss, perangkat, traffic, CPU/RAM, optik, BGP &amp; layanan — default OFF agar billing tetap ringan</p>
+            </div>
+          </div>
+          <div class="nh-hdr-r">
+            <select class="nh-select" id="nhInterval" onchange="NH.saveMeta()">
+              <option value="60">Poll 1 menit</option>
+              <option value="120">Poll 2 menit</option>
+              <option value="300">Poll 5 menit (hemat)</option>
+            </select>
+            <div class="nh-checks">
+              <label><input type="checkbox" id="nhTier2" onchange="NH.saveMeta()"> Tier 2</label>
+              <label><input type="checkbox" id="nhTier3" onchange="NH.saveMeta()"> Tier 3</label>
+            </div>
+            <button class="nh-btn" id="nhPollBtn" onclick="NH.pollNow()" disabled>Poll sekarang</button>
+            <div class="nh-switch off" id="nhSwitch">
+              <span class="lbl">Status</span>
+              <button type="button" class="nh-tog" id="nhTog" onclick="NH.toggle()" aria-label="Toggle Network Health"></button>
+              <span class="nh-tog-txt" id="nhTogTxt">OFF</span>
+            </div>
+          </div>
+        </div>
+
+        <div id="nhOff">
+          <div class="nh-off">
+            <h2>Monitor dimatikan</h2>
+            <p>
+              Tidak ada ping, SNMP, atau query MikroTik tambahan. Invoice, isolir, dan pembayaran
+              tidak terpengaruh. Nyalakan tombol <b>ON</b> hanya jika ingin memantau kualitas jaringan.
+            </p>
+            <p style="margin-bottom:0">Yang akan dipantau: RTT &amp; packet loss, up/down perangkat, traffic uplink, CPU/RAM/suhu, optik SFP &amp; ONT, BGP/OSPF, error port, DNS/RADIUS, dan flow lite (bukan NetFlow penuh).</p>
+          </div>
+        </div>
+
+        <div id="nhOn" style="display:none">
+          <div class="nh-kpis">
+            <div class="nh-kpi"><div class="k">Online</div><div class="v" id="kOnline">—</div><div class="s" id="kTotal">0 perangkat</div></div>
+            <div class="nh-kpi"><div class="k">Offline</div><div class="v" id="kOffline" style="color:var(--nh-crit)">—</div><div class="s">ICMP tidak merespons</div></div>
+            <div class="nh-kpi"><div class="k">RTT rata-rata</div><div class="v" id="kRtt">—</div><div class="s">Target lokal &lt; 10–20 ms</div></div>
+            <div class="nh-kpi"><div class="k">Packet loss max</div><div class="v" id="kLoss">—</div><div class="s">0% = sehat · 2–5% = lag</div></div>
+          </div>
+
+          <div class="nh-tiers">
+            <div class="nh-tier">
+              <h3><span class="nh-badge t1">Tier 1</span> Kritis &amp; wajib</h3>
+              <ul>
+                <li>Latensi / RTT <span id="t1rtt" class="mute">—</span></li>
+                <li>Packet loss <span id="t1loss" class="mute">—</span></li>
+                <li>Device up/down <span id="t1up" class="mute">—</span></li>
+                <li>Traffic uplink/downlink <span id="t1tr" class="mute">—</span></li>
+              </ul>
+            </div>
+            <div class="nh-tier">
+              <h3><span class="nh-badge t2">Tier 2</span> Kesehatan perangkat</h3>
+              <ul>
+                <li>CPU panas (≥85%) <span id="t2cpu" class="mute">—</span></li>
+                <li>Suhu / tegangan <span id="t2temp" class="mute">—</span></li>
+                <li>Optik lemah (SFP/ONT) <span id="t2opt" class="mute">—</span></li>
+                <li>Wireless RSSI/CCQ <span id="t2wifi" class="mute">—</span></li>
+              </ul>
+            </div>
+            <div class="nh-tier">
+              <h3><span class="nh-badge t3">Tier 3</span> Protokol &amp; port</h3>
+              <ul>
+                <li>BGP tidak established <span id="t3bgp" class="mute">—</span></li>
+                <li>Port error / drop <span id="t3err" class="mute">—</span></li>
+                <li>DNS / RADIUS <span id="t3svc" class="mute">—</span></li>
+                <li>Flow lite (conntrack) <span id="t3flow" class="mute">—</span></li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="nh-card">
+            <div class="nh-card-h">
+              <h3>Perangkat infrastruktur</h3>
+              <span class="nh-meta" id="nhMeta">—</span>
+            </div>
+            <div class="nh-tbl-wrap">
+              <table class="nh-tbl" id="nhTable">
+                <thead>
+                  <tr>
+                    <th>Perangkat</th><th>Status</th><th>RTT</th><th>Loss</th>
+                    <th>CPU</th><th>RAM</th><th>Suhu</th><th>RX / TX</th><th>Error</th><th>Alert</th>
+                  </tr>
+                </thead>
+                <tbody id="nhTbody">
+                  <tr><td colspan="10" style="padding:24px;text-align:center;color:var(--nh-muted)">Memuat…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="nh-card">
+            <div class="nh-card-h"><h3>Layanan kritis</h3></div>
+            <div class="nh-svc">
+              <div class="svc"><b>DNS</b><p id="svcDns">—</p></div>
+              <div class="svc"><b>RADIUS AAA</b><p id="svcRadius">—</p></div>
+              <div class="svc"><b>Optik ONT</b><p id="svcOnt">—</p></div>
+            </div>
+            <p class="nh-hint" id="flowHint"></p>
+            <div class="nh-flow" id="flowBox" style="display:none">
+              <table>
+                <thead><tr><th>Destinasi</th><th>Koneksi</th><th>Bytes</th></tr></thead>
+                <tbody id="flowBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+<script src="/js/app.js"></script>
+<script>
+const NH = {
+  enabled: false,
+  saving: false,
+  timer: null,
+
+  async api(path, opt) {
+    if (window.App && App.api) return App.api(path, opt);
+    const headers = { 'Content-Type':'application/json', 'Accept':'application/json' };
+    const token = localStorage.getItem('token');
+    if (token && token !== 'null') headers.Authorization = 'Bearer ' + token;
+    const res = await fetch('/api' + path, { credentials:'include', headers, ...opt });
+    return res.json();
+  },
+
+  setSwitch(on) {
+    this.enabled = !!on;
+    const wrap = document.getElementById('nhSwitch');
+    wrap.classList.toggle('on', this.enabled);
+    wrap.classList.toggle('off', !this.enabled);
+    document.getElementById('nhTogTxt').textContent = this.enabled ? 'ON' : 'OFF';
+    document.getElementById('nhOff').style.display = this.enabled ? 'none' : '';
+    document.getElementById('nhOn').style.display = this.enabled ? '' : 'none';
+    document.getElementById('nhPollBtn').disabled = !this.enabled;
+  },
+
+  async toggle() {
+    if (this.saving) return;
+    this.saving = true;
+    try {
+      const r = await this.api('/network-health/config', {
+        method: 'POST',
+        body: JSON.stringify({ enabled: !this.enabled }),
+      });
+      if (!r || !r.success) { alert((r && r.message) || 'Gagal mengubah status'); return; }
+      this.setSwitch(r.data.enabled);
+      if (r.data.enabled) this.load();
+      else this.stop();
+    } finally { this.saving = false; }
+  },
+
+  async saveMeta() {
+    if (this.saving) return;
+    this.saving = true;
+    try {
+      await this.api('/network-health/config', {
+        method: 'POST',
+        body: JSON.stringify({
+          enabled: this.enabled,
+          interval: document.getElementById('nhInterval').value,
+          tier2: document.getElementById('nhTier2').checked,
+          tier3: document.getElementById('nhTier3').checked,
+        }),
+      });
+    } finally { this.saving = false; }
+  },
+
+  async pollNow() {
+    const btn = document.getElementById('nhPollBtn');
+    btn.disabled = true; btn.textContent = 'Polling…';
+    try {
+      await this.api('/network-health/poll', { method: 'POST', body: '{}' });
+      await this.load();
+    } finally {
+      btn.disabled = !this.enabled; btn.textContent = 'Poll sekarang';
+    }
+  },
+
+  fmtMs(v) { return v == null ? '—' : Number(v).toFixed(1) + ' ms'; },
+  fmtPct(v) { return v == null ? '—' : Number(v).toFixed(0) + '%'; },
+  fmtMbps(v) { return v == null ? '—' : Number(v).toFixed(2); },
+  esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  },
+  cls(ok, warn) { return ok === false ? 'crit' : (warn ? 'warn' : 'ok'); },
+
+  render(d) {
+    const s = d.summary || {};
+    document.getElementById('kOnline').textContent = s.online ?? 0;
+    document.getElementById('kOffline').textContent = s.offline ?? 0;
+    document.getElementById('kTotal').textContent = (s.total || 0) + ' perangkat';
+    document.getElementById('kRtt').textContent = s.avgRtt == null ? '—' : s.avgRtt + ' ms';
+    document.getElementById('kLoss').textContent = (s.maxLoss || 0) + '%';
+
+    const st = d.status || {};
+    document.getElementById('nhMeta').textContent = st.lastRunAt
+      ? ('Terakhir poll ' + new Date(st.lastRunAt).toLocaleTimeString('id-ID') + ' · ' + (st.lastDurationMs || 0) + ' ms · ' + (st.devicesPolled || 0) + ' device')
+      : 'Belum ada data — klik Poll sekarang';
+
+    const set = (id, text, cls) => {
+      const el = document.getElementById(id);
+      el.textContent = text;
+      el.className = cls || 'mute';
+    };
+    set('t1rtt', s.avgRtt == null ? 'belum ada' : s.avgRtt + ' ms', s.avgRtt != null && s.avgRtt > 20 ? 'warn' : 'ok');
+    set('t1loss', (s.maxLoss || 0) + '%', s.maxLoss >= 5 ? 'crit' : (s.maxLoss >= 2 ? 'warn' : 'ok'));
+    set('t1up', (s.online||0) + ' up / ' + (s.offline||0) + ' down', s.offline ? 'crit' : 'ok');
+    const rx = (d.devices||[]).reduce((a,x)=>a+(x.rxMbps||0),0);
+    const tx = (d.devices||[]).reduce((a,x)=>a+(x.txMbps||0),0);
+    set('t1tr', this.fmtMbps(rx) + ' / ' + this.fmtMbps(tx) + ' Mbps', 'ok');
+    set('t2cpu', (s.cpuHot||0) + ' perangkat', s.cpuHot ? 'warn' : 'ok');
+    const temps = (d.devices||[]).filter(x => x.temperature != null);
+    set('t2temp', temps.length ? temps.map(x => x.temperature + '°').join(', ') : 'n/a', 'mute');
+    set('t2opt', (s.opticalWeak||0) + ' lemah', s.opticalWeak ? 'warn' : 'ok');
+    const wifiN = (d.devices||[]).reduce((a,x)=>a+((x.details&&x.details.wireless)||[]).length,0);
+    set('t2wifi', wifiN + ' klien', 'ok');
+    set('t3bgp', (s.bgpDown||0) + ' sesi', s.bgpDown ? 'crit' : 'ok');
+    set('t3err', (s.errorPorts||0) + ' port', s.errorPorts ? 'warn' : 'ok');
+
+    const svc = d.services || {};
+    const dns = svc.dns;
+    const rad = svc.radius;
+    document.getElementById('svcDns').textContent = dns
+      ? ((dns.ok ? 'OK' : 'Gagal') + ' · ' + (dns.ms||0) + ' ms · ' + (dns.detail||''))
+      : 'Belum dicek';
+    document.getElementById('svcRadius').textContent = rad ? (rad.detail || '—') : 'Belum dicek';
+    const ont = svc.optical;
+    document.getElementById('svcOnt').textContent = ont
+      ? (ont.online + ' online / ' + ont.offline + ' offline · ' + ont.weak + ' sinyal lemah')
+      : 'GenieACS/OLT belum ada data';
+    set('t3svc', !dns ? '—' : (dns.ok === false || rad && rad.ok === false ? 'bermasalah' : 'sehat'),
+      (!dns || (dns.ok !== false && (!rad || rad.ok !== false))) ? 'ok' : 'crit');
+
+    const flow = svc.flow;
+    const box = document.getElementById('flowBox');
+    const hint = document.getElementById('flowHint');
+    if (flow && flow.available && flow.data && flow.data.length) {
+      box.style.display = '';
+      hint.textContent = (flow.note || '') + (flow.router ? (' · Router: ' + flow.router) : '');
+      document.getElementById('flowBody').innerHTML = flow.data.map(r =>
+        '<tr><td class="mono">' + this.esc(r.dst||'') + '</td><td>' + (r.connections||0) + '</td><td class="mono">' + (r.bytes||0).toLocaleString('id-ID') + '</td></tr>'
+      ).join('');
+      set('t3flow', flow.data.length + ' top talker', 'ok');
+    } else {
+      box.style.display = 'none';
+      hint.textContent = (flow && flow.note) || 'Flow lite memakai connection-tracking MikroTik (bukan NetFlow penuh, agar billing tidak berat).';
+      set('t3flow', 'snapshot', 'mute');
+    }
+
+    const rows = d.devices || [];
+    const tb = document.getElementById('nhTbody');
+    if (!rows.length) {
+      tb.innerHTML = '<tr><td colspan="10" style="padding:24px;text-align:center;color:var(--nh-muted)">Belum ada hasil poll. Pastikan ada device aktif di Device Management, lalu klik Poll sekarang.</td></tr>';
+      return;
+    }
+    tb.innerHTML = rows.map(r => {
+      const al = (r.alerts||[]).map(a => a.msg).join(' · ');
+      return '<tr>'
+        + '<td><b>' + this.esc(r.name||'') + '</b><div class="mono" style="color:var(--nh-muted)">' + this.esc(r.ip||'') + ' · ' + this.esc(r.type||'') + '</div></td>'
+        + '<td><span class="st ' + this.esc(r.status||'unknown') + '">' + this.esc(r.status||'unknown') + '</span></td>'
+        + '<td class="mono">' + this.fmtMs(r.rttAvg) + '</td>'
+        + '<td class="mono">' + (r.packetLoss == null ? '—' : r.packetLoss + '%') + '</td>'
+        + '<td class="mono">' + this.fmtPct(r.cpu) + '</td>'
+        + '<td class="mono">' + this.fmtPct(r.ram) + '</td>'
+        + '<td class="mono">' + (r.temperature == null ? '—' : r.temperature + '°C') + '</td>'
+        + '<td class="mono">' + this.fmtMbps(r.rxMbps) + ' / ' + this.fmtMbps(r.txMbps) + '</td>'
+        + '<td class="mono">' + ((r.ifaceErrors||0) + (r.ifaceDrops||0)) + '</td>'
+        + '<td class="alerts">' + this.esc(al || '—') + '</td>'
+        + '</tr>';
+    }).join('');
+  },
+
+  async load() {
+    const r = await this.api('/network-health/overview');
+    if (!r || !r.success) return;
+    const d = r.data || {};
+    this.setSwitch(!!d.enabled);
+    if (d.config) {
+      document.getElementById('nhInterval').value = String(d.config.interval || 60);
+      document.getElementById('nhTier2').checked = d.config.tier2 !== false;
+      document.getElementById('nhTier3').checked = d.config.tier3 !== false;
+    }
+    if (d.enabled) this.render(d);
+  },
+
+  start() {
+    this.stop();
+    this.timer = setInterval(() => { if (this.enabled) this.load(); }, 20000);
+  },
+  stop() { if (this.timer) { clearInterval(this.timer); this.timer = null; } },
+};
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await NH.load();
+  NH.start();
+});
+</script>
+</body>
+</html>

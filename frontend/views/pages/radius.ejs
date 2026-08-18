@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="id" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title %> - <%= appName %></title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/app.css?v=rd6">
+  <style>
+    :root {
+      --rd-blue:#2563eb; --rd-blue-d:#1d4ed8; --rd-green:#16a34a; --rd-red:#dc2626;
+      --rd-amber:#d97706; --border:#e2e8f0; --text:#0f172a; --muted:#64748b; --faint:#94a3b8;
+    }
+    body, .main-content, .page-content { font-family:'Plus Jakarta Sans',sans-serif; font-style:normal !important; font-synthesis:none; }
+    .mono { font-family:'Plus Jakarta Sans',sans-serif; font-weight:600; font-style:normal !important; font-synthesis:none; }
+    .rd-hdr { display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:22px; }
+    .rd-hdr-l h1 { font-size:22px; font-weight:800; color:var(--text); margin:0 0 4px; font-style:normal; }
+    .rd-hdr-l p  { font-size:13px; color:var(--muted); margin:0; }
+    .rd-hdr-r { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .btn { display:inline-flex; align-items:center; gap:6px; padding:9px 16px; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer; border:1px solid; font-family:inherit; font-style:normal; transform:none; }
+    .btn-outline { background:#fff; border-color:var(--border); color:#374151; }
+    .btn-blue { background:var(--rd-blue); border-color:var(--rd-blue); color:#fff; }
+    .btn-green { background:var(--rd-green); border-color:var(--rd-green); color:#fff; }
+    .btn-sm { padding:6px 12px; font-size:12px; border-radius:8px; }
+    .btn:disabled { opacity:.5; cursor:not-allowed; }
+    .rd-cards { display:grid; grid-template-columns:repeat(5,1fr); background:#fff; border-radius:16px; border:1px solid #e8eaed; overflow:hidden; margin-bottom:18px; }
+    .rd-card { padding:18px 20px; border-right:1px solid #e8eaed; text-align:center; }
+    .rd-card:last-child { border-right:none; }
+    .card-lbl { font-size:12px; font-weight:500; color:#64748b; margin-bottom:8px; font-style:normal; }
+    .card-val { font-size:28px; font-weight:800; color:#0f172a; letter-spacing:0; line-height:1; font-style:normal; }
+    .rd-tabs { display:flex; gap:4px; background:#f1f5f9; padding:4px; border-radius:12px; margin-bottom:16px; flex-wrap:wrap; }
+    .rd-tab { padding:8px 14px; border:none; background:transparent; border-radius:9px; font-size:13px; font-weight:700; color:var(--muted); cursor:pointer; font-family:inherit; font-style:normal; }
+    .rd-tab.active { background:#fff; color:var(--text); box-shadow:0 1px 3px rgba(15,23,42,.08); }
+    .rd-panel { background:#fff; border:1px solid var(--border); border-radius:16px; overflow:hidden; transform:none; }
+    .rd-toolbar { display:flex; gap:8px; padding:12px 16px; border-bottom:1px solid var(--border); flex-wrap:wrap; align-items:center; }
+    .rd-toolbar input, .rd-toolbar select { padding:8px 12px; border:1px solid var(--border); border-radius:10px; font-size:13px; font-family:inherit; -webkit-appearance:none; appearance:none; transform:none; box-sizing:border-box; }
+    .rd-table { width:100%; border-collapse:collapse; }
+    .rd-table th, .rd-table td {
+      text-align:center !important;
+      vertical-align:middle !important;
+      font-style:normal !important;
+      font-synthesis:none !important;
+      transform:none !important;
+    }
+    .rd-table th { padding:11px 14px; font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.6px; background:#f8fafc; border-bottom:1px solid var(--border); }
+    .rd-table td { padding:12px 14px; font-size:13px; border-bottom:1px solid #f1f5f9; }
+    .rd-table tbody td:nth-child(1) {
+      font-family: Arial, Helvetica, sans-serif !important;
+      font-style: normal !important;
+      font-weight: 600 !important;
+      font-synthesis: none !important;
+      text-align: center !important;
+      vertical-align: middle !important;
+      letter-spacing: 0 !important;
+    }
+    .rd-table tbody td:nth-child(1)::before,
+    .rd-table tbody td:nth-child(1)::after { content: none !important; display: none !important; }
+    .pill { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:700; }
+    .pill-on { background:#dcfce7; color:#15803d; }
+    .pill-off { background:#fee2e2; color:#b91c1c; }
+    .pill-live { background:#dbeafe; color:#1d4ed8; }
+    .act-btn { width:30px; height:30px; border:1px solid var(--border); background:#fff; border-radius:8px; cursor:pointer; color:#64748b; }
+    .act-btn.danger { color:var(--rd-red); }
+    /* Overlay must beat app.css `.modal` (that file treats .modal as the inner card:
+       width:90%; max-width:560px). Combined with 1.5px borders + flex-center, mobile
+       zoom rounds left/right edges differently so the form looks tilted. */
+    .modal {
+      display:none; position:fixed; inset:0;
+      width:auto !important; max-width:none !important; max-height:none !important;
+      background:rgba(15,23,42,.45); z-index:80; padding:16px; overflow:auto;
+      transform:none !important; box-shadow:none; border-radius:0;
+    }
+    .modal.show { display:block; }
+    .modal-box { background:#fff; border-radius:16px; width:100%; max-width:480px; max-height:90vh; overflow:auto; margin:12px auto; transform:none !important; box-shadow:0 16px 40px rgba(15,23,42,.18); }
+    .modal-hd { display:flex; justify-content:space-between; align-items:center; padding:16px 18px; border-bottom:1px solid var(--border); font-weight:800; }
+    .modal-bd { padding:16px 18px; display:flex; flex-direction:column; gap:12px; }
+    .modal-ft { padding:12px 18px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:8px; }
+    .field label { display:block; font-size:12px; font-weight:700; color:#475569; margin-bottom:5px; }
+    .field input, .field select, .field textarea {
+      width:100%; padding:9px 12px; border:1px solid var(--border); border-radius:10px; font-size:13px; font-family:inherit;
+      box-sizing:border-box; -webkit-appearance:none; appearance:none; transform:none !important;
+    }
+    .hint { font-size:12px; color:var(--muted); line-height:1.55; background:#f8fafc; border:1px solid var(--border); border-radius:10px; padding:10px 12px; }
+    .empty { text-align:center; padding:48px 16px; color:var(--muted); }
+    @media(max-width:900px){ .rd-cards{grid-template-columns:repeat(2,1fr);} .rd-card:nth-child(odd){border-right:1px solid #e8eaed;} }
+  </style>
+</head>
+<body>
+<div class="app-layout">
+  <%- include('../partials/sidebar') %>
+  <style id="rd-uname-fix">
+    /* Must load AFTER sidebar italic rules */
+    .main-content .rd-table tbody td:nth-child(1),
+    .main-content .rd-table td.rd-uname {
+      font-style: normal !important;
+      font-synthesis: none !important;
+      text-align: center !important;
+      vertical-align: middle !important;
+      font-family: Arial, Helvetica, sans-serif !important;
+      font-weight: 600 !important;
+      letter-spacing: 0 !important;
+      font-variation-settings: "ital" 0 !important;
+    }
+  </style>
+  <div class="main-content">
+    <%- include('../partials/topbar') %>
+    <main class="page-content">
+      <div class="rd-hdr">
+        <div class="rd-hdr-l">
+          <h1>RADIUS AAA</h1>
+          <p>Otentikasi PPPoE/Hotspot via FreeRADIUS (tabel MySQL kompatibel)</p>
+        </div>
+        <div class="rd-hdr-r">
+          <button class="btn btn-outline btn-sm" onclick="loadAll(true)">Refresh</button>
+          <button class="btn btn-green btn-sm" onclick="syncCustomers()">Sinkron Pelanggan</button>
+          <button class="btn btn-blue btn-sm" onclick="openUserModal()">+ User RADIUS</button>
+        </div>
+      </div>
+
+      <div class="rd-cards">
+        <div class="rd-card"><div class="card-lbl">User</div><div class="card-val" id="stUsers">–</div></div>
+        <div class="rd-card"><div class="card-lbl">Online</div><div class="card-val" id="stOnline">–</div></div>
+        <div class="rd-card"><div class="card-lbl">Disabled</div><div class="card-val" id="stDisabled">–</div></div>
+        <div class="rd-card"><div class="card-lbl">NAS</div><div class="card-val" id="stNas">–</div></div>
+        <div class="rd-card"><div class="card-lbl">Profile</div><div class="card-val" id="stProfiles">–</div></div>
+      </div>
+
+      <div class="rd-tabs">
+        <button class="rd-tab active" data-tab="users" onclick="setTab(this,'users')">Users</button>
+        <button class="rd-tab" data-tab="nas" onclick="setTab(this,'nas')">NAS / Router</button>
+        <button class="rd-tab" data-tab="profiles" onclick="setTab(this,'profiles')">Profiles</button>
+        <button class="rd-tab" data-tab="sessions" onclick="setTab(this,'sessions')">Sessions</button>
+        <button class="rd-tab" data-tab="settings" onclick="setTab(this,'settings')">Pengaturan</button>
+      </div>
+
+      <section id="tab-users" class="rd-panel">
+        <div class="rd-toolbar">
+          <input id="userSearch" placeholder="Cari username..." oninput="filterUsers()">
+          <select id="userStatus" onchange="filterUsers()">
+            <option value="">Semua status</option>
+            <option value="active">Aktif</option>
+            <option value="disabled">Disabled</option>
+            <option value="online">Online</option>
+          </select>
+          <span id="userCount" style="margin-left:auto;font-size:12px;color:var(--muted);font-weight:600;"></span>
+        </div>
+        <div style="overflow:auto">
+          <table class="rd-table">
+            <thead><tr><th>Username</th><th>Password</th><th>Profile</th><th>IP</th><th>Status</th><th>Aksi</th></tr></thead>
+            <tbody id="userTbody"><tr><td colspan="6" class="empty">Memuat...</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="tab-nas" class="rd-panel" style="display:none">
+        <div class="rd-toolbar">
+          <button class="btn btn-outline btn-sm" onclick="syncNas()">Sinkron dari Device Management</button>
+          <button class="btn btn-blue btn-sm" onclick="openNasModal()">+ NAS</button>
+        </div>
+        <div style="overflow:auto">
+          <table class="rd-table">
+            <thead><tr><th>Nama</th><th>IP / Host</th><th>Tipe</th><th>Secret</th><th></th></tr></thead>
+            <tbody id="nasTbody"><tr><td colspan="5" class="empty">Memuat...</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="tab-profiles" class="rd-panel" style="display:none">
+        <div class="rd-toolbar">
+          <button class="btn btn-blue btn-sm" onclick="openProfileModal()">+ Profile</button>
+        </div>
+        <div style="overflow:auto">
+          <table class="rd-table">
+            <thead><tr><th>Group / Profile</th><th>Rate Limit</th><th>User</th><th></th></tr></thead>
+            <tbody id="profTbody"><tr><td colspan="4" class="empty">Memuat...</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="tab-sessions" class="rd-panel" style="display:none">
+        <div class="rd-toolbar">
+          <input id="sessSearch" placeholder="Cari session..." onkeydown="if(event.key==='Enter')loadSessions()">
+          <label style="font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center;">
+            <input type="checkbox" id="sessAll" onchange="loadSessions()"> Termasuk yang sudah stop
+          </label>
+          <button class="btn btn-outline btn-sm" onclick="loadSessions()">Muat</button>
+        </div>
+        <div style="overflow:auto">
+          <table class="rd-table">
+            <thead><tr><th>Username</th><th>IP</th><th>NAS</th><th>MAC</th><th>Mulai</th><th>Durasi</th></tr></thead>
+            <tbody id="sessTbody"><tr><td colspan="6" class="empty">Belum ada accounting</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="tab-settings" class="rd-panel" style="display:none;padding:18px;">
+        <div class="hint" style="margin-bottom:16px">
+          Arahkan FreeRADIUS ke database CRM ini (<code>nas</code>, <code>radcheck</code>, <code>radreply</code>, <code>radusergroup</code>, <code>radgroupreply</code>, <code>radacct</code>).
+          Di MikroTik: <code>/radius add service=ppp address=&lt;IP server&gt; secret=&lt;shared secret&gt;</code>
+          lalu <code>/ppp aaa set use-radius=yes</code>.
+        </div>
+        <div class="field" style="margin-bottom:12px;">
+          <label><input type="checkbox" id="setEnabled"> Aktifkan RADIUS di CRM (sinkron isolir &amp; pelanggan)</label>
+        </div>
+        <div class="field" style="margin-bottom:12px;">
+          <label>Shared secret</label>
+          <input id="setSecret" type="text" autocomplete="off">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px;">
+          <div class="field"><label>Auth port</label><input id="setAuth" type="number"></div>
+          <div class="field"><label>Acct port</label><input id="setAcct" type="number"></div>
+          <div class="field"><label>CoA port</label><input id="setCoa" type="number"></div>
+        </div>
+        <button class="btn btn-blue" onclick="saveSettings()">Simpan Pengaturan</button>
+      </section>
+    </main>
+  </div>
+</div>
+
+<div class="modal" id="userModal">
+  <div class="modal-box">
+    <div class="modal-hd"><span id="userModalTitle">User RADIUS</span><button class="act-btn" onclick="closeModal('userModal')">✕</button></div>
+    <div class="modal-bd">
+      <div class="field"><label>Username</label><input id="uName"></div>
+      <div class="field"><label>Password</label><input id="uPass" placeholder="Kosongkan jika tidak diubah"></div>
+      <div class="field"><label>Profile / group</label><input id="uGroup" placeholder="mis. 20Mbps"></div>
+      <div class="field"><label>Framed IP (opsional)</label><input id="uIp" placeholder="10.10.10.2"></div>
+      <label style="font-size:13px;"><input type="checkbox" id="uDisabled"> Disabled (Auth-Type Reject)</label>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-outline btn-sm" onclick="closeModal('userModal')">Batal</button>
+      <button class="btn btn-blue btn-sm" onclick="saveUser()">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="nasModal">
+  <div class="modal-box">
+    <div class="modal-hd"><span id="nasModalTitle">NAS</span><button class="act-btn" onclick="closeModal('nasModal')">✕</button></div>
+    <div class="modal-bd">
+      <input type="hidden" id="nId">
+      <div class="field"><label>IP / hostname</label><input id="nHost"></div>
+      <div class="field"><label>Nama pendek</label><input id="nShort"></div>
+      <div class="field"><label>Secret</label><input id="nSecret"></div>
+      <div class="field"><label>Tipe</label><input id="nType" value="mikrotik"></div>
+      <div class="field"><label>Deskripsi</label><input id="nDesc"></div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-outline btn-sm" onclick="closeModal('nasModal')">Batal</button>
+      <button class="btn btn-blue btn-sm" onclick="saveNas()">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="profModal">
+  <div class="modal-box">
+    <div class="modal-hd"><span>Profile RADIUS</span><button class="act-btn" onclick="closeModal('profModal')">✕</button></div>
+    <div class="modal-bd">
+      <div class="field"><label>Nama group</label><input id="pName" placeholder="20Mbps"></div>
+      <div class="field"><label>Mikrotik-Rate-Limit</label><input id="pRate" placeholder="20M/20M"></div>
+      <div class="field"><label>Framed-Pool (opsional)</label><input id="pPool"></div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-outline btn-sm" onclick="closeModal('profModal')">Batal</button>
+      <button class="btn btn-blue btn-sm" onclick="saveProfile()">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/app.js"></script>
+<script>
+  var _USERS = [], _EDIT_USER = null;
+
+  function esc(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function setTab(el, id) {
+    document.querySelectorAll('.rd-tab').forEach(t => t.classList.toggle('active', t === el));
+    ['users','nas','profiles','sessions','settings'].forEach(k => {
+      const p = document.getElementById('tab-' + k);
+      if (p) p.style.display = k === id ? '' : 'none';
+    });
+    if (id === 'sessions') loadSessions();
+    if (id === 'settings') loadSettings();
+  }
+  function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+  async function loadAll() {
+    const [st, users, nas, prof] = await Promise.all([
+      App.api('/radius/stats'),
+      App.api('/radius/users?limit=400'),
+      App.api('/radius/nas'),
+      App.api('/radius/profiles')
+    ]);
+    if (st?.success) {
+      const d = st.data || {};
+      document.getElementById('stUsers').textContent = d.users ?? 0;
+      document.getElementById('stOnline').textContent = d.online ?? 0;
+      document.getElementById('stDisabled').textContent = d.disabled ?? 0;
+      document.getElementById('stNas').textContent = d.nas ?? 0;
+      document.getElementById('stProfiles').textContent = d.profiles ?? 0;
+    }
+    _USERS = users?.data || [];
+    renderUsers(_USERS);
+    renderNas(nas?.data || []);
+    renderProfiles(prof?.data || []);
+  }
+
+  function filterUsers() {
+    const q = (document.getElementById('userSearch').value || '').toLowerCase();
+    const st = document.getElementById('userStatus').value;
+    const list = _USERS.filter(u => {
+      if (q && !(u.username || '').toLowerCase().includes(q)) return false;
+      if (st === 'disabled' && !u.disabled) return false;
+      if (st === 'active' && u.disabled) return false;
+      if (st === 'online' && !u.online) return false;
+      return true;
+    });
+    renderUsers(list);
+  }
+
+  function renderUsers(list) {
+    const tb = document.getElementById('userTbody');
+    document.getElementById('userCount').textContent = (list.length) + ' user';
+    if (!list.length) { tb.innerHTML = '<tr><td colspan="6" class="empty">Belum ada user RADIUS</td></tr>'; return; }
+    tb.innerHTML = list.map(u => `
+      <tr>
+        <td class="rd-uname" style="font-style:normal !important;text-align:center !important;font-family:Arial,Helvetica,sans-serif !important;font-synthesis:none !important;font-weight:600 !important">${esc(u.username)}</td>
+        <td>${esc(u.password)}</td>
+        <td>${esc(u.groupname || '—')}</td>
+        <td class="mono">${esc(u.framed_ip || '—')}</td>
+        <td>
+          ${u.online ? '<span class="pill pill-live">online</span> ' : ''}
+          <span class="pill ${u.disabled ? 'pill-off' : 'pill-on'}">${u.disabled ? 'disabled' : 'aktif'}</span>
+        </td>
+        <td style="white-space:nowrap;text-align:center">
+          <button class="act-btn" title="Toggle" onclick="toggleUser('${esc(u.username)}', ${u.disabled ? 'false' : 'true'})">${u.disabled ? '▶' : '⏸'}</button>
+          <button class="act-btn" title="Edit" onclick="editUser('${esc(u.username)}')">✎</button>
+          <button class="act-btn danger" title="Hapus" onclick="deleteUser('${esc(u.username)}')">✕</button>
+        </td>
+      </tr>`).join('');
+    tb.querySelectorAll('td:first-child').forEach(function (td) {
+      td.style.setProperty('font-style', 'normal', 'important');
+      td.style.setProperty('text-align', 'center', 'important');
+      td.style.setProperty('font-family', 'Arial, Helvetica, sans-serif', 'important');
+      td.style.setProperty('font-synthesis', 'none', 'important');
+    });
+  }
+
+  function renderNas(list) {
+    const tb = document.getElementById('nasTbody');
+    if (!list.length) { tb.innerHTML = '<tr><td colspan="5" class="empty">Belum ada NAS. Sinkron dari Device Management atau tambah manual.</td></tr>'; return; }
+    tb.innerHTML = list.map(n => `
+      <tr>
+        <td>${esc(n.shortname || n.nasname)}</td>
+        <td class="mono">${esc(n.nasname)}</td>
+        <td>${esc(n.type || 'mikrotik')}</td>
+        <td class="mono">${esc(n.secret || '')}</td>
+        <td>
+          <button class="act-btn" onclick='editNas(${JSON.stringify(n).replace(/'/g,"&#39;")})'>✎</button>
+          <button class="act-btn danger" onclick="deleteNas(${n.id})">✕</button>
+        </td>
+      </tr>`).join('');
+  }
+
+  function renderProfiles(list) {
+    const tb = document.getElementById('profTbody');
+    if (!list.length) { tb.innerHTML = '<tr><td colspan="4" class="empty">Belum ada profile</td></tr>'; return; }
+    tb.innerHTML = list.map(p => `
+      <tr>
+        <td>${esc(p.groupname)}</td>
+        <td class="mono">${esc(p.rate_limit || '—')}</td>
+        <td>${p.users || 0}</td>
+        <td><button class="act-btn danger" onclick="deleteProfile('${esc(p.groupname)}')">✕</button></td>
+      </tr>`).join('');
+  }
+
+  async function loadSessions() {
+    const q = encodeURIComponent(document.getElementById('sessSearch').value || '');
+    const all = document.getElementById('sessAll').checked ? '&all=1' : '';
+    const r = await App.api('/radius/sessions?search=' + q + all);
+    const tb = document.getElementById('sessTbody');
+    const list = r?.data || [];
+    if (!list.length) { tb.innerHTML = '<tr><td colspan="6" class="empty">Tidak ada session</td></tr>'; return; }
+    tb.innerHTML = list.map(s => `
+      <tr>
+        <td class="mono">${esc(s.username)}</td>
+        <td class="mono">${esc(s.framedipaddress || '—')}</td>
+        <td class="mono">${esc(s.nasipaddress || '—')}</td>
+        <td class="mono">${esc(s.callingstationid || '—')}</td>
+        <td>${esc(s.acctstarttime || '—')}</td>
+        <td>${s.acctsessiontime != null ? Math.round(s.acctsessiontime/60) + ' m' : '—'}</td>
+      </tr>`).join('');
+  }
+
+  async function loadSettings() {
+    const r = await App.api('/radius/settings');
+    if (!r?.success) return;
+    const s = r.data;
+    document.getElementById('setEnabled').checked = !!s.enabled;
+    document.getElementById('setSecret').value = s.secret || '';
+    document.getElementById('setAuth').value = s.auth_port || 1812;
+    document.getElementById('setAcct').value = s.acct_port || 1813;
+    document.getElementById('setCoa').value = s.coa_port || 3799;
+  }
+  async function saveSettings() {
+    const body = {
+      enabled: document.getElementById('setEnabled').checked,
+      secret: document.getElementById('setSecret').value,
+      auth_port: document.getElementById('setAuth').value,
+      acct_port: document.getElementById('setAcct').value,
+      coa_port: document.getElementById('setCoa').value
+    };
+    const r = await App.api('/radius/settings', { method:'PUT', body: JSON.stringify(body) });
+    App.showToast(r?.success ? 'Pengaturan disimpan' : (r?.message || 'Gagal'), r?.success ? 'success' : 'error');
+  }
+
+  function openUserModal() {
+    _EDIT_USER = null;
+    document.getElementById('userModalTitle').textContent = 'Tambah User';
+    document.getElementById('uName').value = '';
+    document.getElementById('uName').disabled = false;
+    document.getElementById('uPass').value = '';
+    document.getElementById('uGroup').value = '';
+    document.getElementById('uIp').value = '';
+    document.getElementById('uDisabled').checked = false;
+    document.getElementById('userModal').classList.add('show');
+  }
+  function editUser(username) {
+    const u = _USERS.find(x => x.username === username);
+    if (!u) return;
+    _EDIT_USER = username;
+    document.getElementById('userModalTitle').textContent = 'Edit User';
+    document.getElementById('uName').value = u.username;
+    document.getElementById('uName').disabled = true;
+    document.getElementById('uPass').value = '';
+    document.getElementById('uGroup').value = u.groupname || '';
+    document.getElementById('uIp').value = u.framed_ip || '';
+    document.getElementById('uDisabled').checked = !!u.disabled;
+    document.getElementById('userModal').classList.add('show');
+  }
+  async function saveUser() {
+    const username = document.getElementById('uName').value.trim();
+    const body = {
+      username,
+      password: document.getElementById('uPass').value,
+      groupname: document.getElementById('uGroup').value.trim(),
+      framed_ip: document.getElementById('uIp').value.trim(),
+      disabled: document.getElementById('uDisabled').checked
+    };
+    const url = _EDIT_USER ? '/radius/users/' + encodeURIComponent(_EDIT_USER) : '/radius/users';
+    const method = _EDIT_USER ? 'PUT' : 'POST';
+    const r = await App.api(url, { method, body: JSON.stringify(body) });
+    if (r?.success) { closeModal('userModal'); App.showToast(r.message, 'success'); await loadAll(); }
+    else App.showToast(r?.message || 'Gagal', 'error');
+  }
+  async function deleteUser(username) {
+    if (!confirm('Hapus user RADIUS "' + username + '"?')) return;
+    _USERS = _USERS.filter(u => u.username !== username);
+    renderUsers(_USERS);
+    const r = await App.api('/radius/users/' + encodeURIComponent(username), { method:'DELETE' });
+    if (!r?.success) App.showToast(r?.message || 'Gagal', 'error');
+    else App.showToast('User dihapus', 'success');
+    await loadAll();
+  }
+  async function toggleUser(username, disable) {
+    const path = disable ? '/disable' : '/enable';
+    const r = await App.api('/radius/users/' + encodeURIComponent(username) + path, { method:'POST', body:'{}' });
+    App.showToast(r?.success ? r.message : (r?.message || 'Gagal'), r?.success ? 'success' : 'error');
+    await loadAll();
+  }
+
+  function openNasModal() {
+    document.getElementById('nId').value = '';
+    document.getElementById('nHost').value = '';
+    document.getElementById('nShort').value = '';
+    document.getElementById('nSecret').value = '';
+    document.getElementById('nType').value = 'mikrotik';
+    document.getElementById('nDesc').value = '';
+    document.getElementById('nasModal').classList.add('show');
+  }
+  function editNas(n) {
+    document.getElementById('nId').value = n.id;
+    document.getElementById('nHost').value = n.nasname || '';
+    document.getElementById('nShort').value = n.shortname || '';
+    document.getElementById('nSecret').value = n.secret || '';
+    document.getElementById('nType').value = n.type || 'mikrotik';
+    document.getElementById('nDesc').value = n.description || '';
+    document.getElementById('nasModal').classList.add('show');
+  }
+  async function saveNas() {
+    const id = document.getElementById('nId').value;
+    const body = {
+      nasname: document.getElementById('nHost').value.trim(),
+      shortname: document.getElementById('nShort').value.trim(),
+      secret: document.getElementById('nSecret').value,
+      type: document.getElementById('nType').value.trim() || 'mikrotik',
+      description: document.getElementById('nDesc').value.trim()
+    };
+    const url = id ? '/radius/nas/' + id : '/radius/nas';
+    const r = await App.api(url, { method: id ? 'PUT' : 'POST', body: JSON.stringify(body) });
+    if (r?.success) { closeModal('nasModal'); App.showToast(r.message, 'success'); await loadAll(); }
+    else App.showToast(r?.message || 'Gagal', 'error');
+  }
+  async function deleteNas(id) {
+    if (!confirm('Hapus NAS ini?')) return;
+    const r = await App.api('/radius/nas/' + id, { method:'DELETE' });
+    App.showToast(r?.success ? 'NAS dihapus' : (r?.message || 'Gagal'), r?.success ? 'success' : 'error');
+    await loadAll();
+  }
+  async function syncNas() {
+    const r = await App.api('/radius/nas/sync-devices', { method:'POST', body:'{}' });
+    App.showToast(r?.message || 'Selesai', r?.success ? 'success' : 'error');
+    await loadAll();
+  }
+
+  function openProfileModal() {
+    document.getElementById('pName').value = '';
+    document.getElementById('pRate').value = '';
+    document.getElementById('pPool').value = '';
+    document.getElementById('profModal').classList.add('show');
+  }
+  async function saveProfile() {
+    const body = {
+      groupname: document.getElementById('pName').value.trim(),
+      rate_limit: document.getElementById('pRate').value.trim(),
+      pool: document.getElementById('pPool').value.trim()
+    };
+    const r = await App.api('/radius/profiles', { method:'POST', body: JSON.stringify(body) });
+    if (r?.success) { closeModal('profModal'); App.showToast(r.message, 'success'); await loadAll(); }
+    else App.showToast(r?.message || 'Gagal', 'error');
+  }
+  async function deleteProfile(name) {
+    if (!confirm('Hapus profile "' + name + '"?')) return;
+    const r = await App.api('/radius/profiles/' + encodeURIComponent(name), { method:'DELETE' });
+    App.showToast(r?.success ? 'Profile dihapus' : (r?.message || 'Gagal'), r?.success ? 'success' : 'error');
+    await loadAll();
+  }
+
+  async function syncCustomers() {
+    const r = await App.api('/radius/users/sync-customers', { method:'POST', body:'{}' });
+    App.showToast(r?.message || 'Selesai', r?.success ? 'success' : 'error');
+    await loadAll();
+  }
+
+  document.addEventListener('DOMContentLoaded', loadAll);
+</script>
+</body>
+</html>
