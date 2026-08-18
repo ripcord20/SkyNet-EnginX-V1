@@ -110,6 +110,8 @@ const PushNotification = require('./PushNotification')(sequelize);
 // NOC monitor preset — saved bandwidth-monitor card per user
 const NocMonitorPreset = require('./NocMonitorPreset')(sequelize);
 const NmsInterfacePreset = require('./NmsInterfacePreset')(sequelize);
+const NetworkHealthSnapshot = require('./NetworkHealthSnapshot')(sequelize);
+const NetworkHealthSample = require('./NetworkHealthSample')(sequelize);
 
 // Sales module — profil sales, registrasi pelanggan, komisi
 const SalesProfile        = require('./SalesProfile')(sequelize);
@@ -299,6 +301,8 @@ const db = {
   PushNotification,
   NocMonitorPreset,
   NmsInterfacePreset,
+  NetworkHealthSnapshot,
+  NetworkHealthSample,
   SalesProfile,
   RegistrationRequest,
   SalesCommission,
@@ -367,6 +371,11 @@ PushTemplate.belongsTo(User,             { foreignKey: 'created_by',  as: 'creat
 NocMonitorPreset.belongsTo(User,   { foreignKey: 'user_id',   as: 'user'   });
 NocMonitorPreset.belongsTo(Device, { foreignKey: 'router_id', as: 'router' });
 NmsInterfacePreset.belongsTo(Device, { foreignKey: 'router_id', as: 'router' });
+
+NetworkHealthSnapshot.belongsTo(Device, { foreignKey: 'device_id', as: 'device' });
+Device.hasOne(NetworkHealthSnapshot, { foreignKey: 'device_id', as: 'health_snapshot' });
+NetworkHealthSample.belongsTo(Device, { foreignKey: 'device_id', as: 'device' });
+Device.hasMany(NetworkHealthSample, { foreignKey: 'device_id', as: 'health_samples' });
 User.hasMany(NocMonitorPreset,     { foreignKey: 'user_id',   as: 'noc_monitor_presets' });
 
 // ── Sales module associations ─────────────────────────────────

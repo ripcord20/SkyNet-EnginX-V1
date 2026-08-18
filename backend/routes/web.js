@@ -511,6 +511,10 @@ router.get('/monitoring/device-monitor', authenticate, blockFinanceArea, (req, r
   res.render('pages/device-monitor', { title: 'Device Monitor', user: req.user, active: 'device-monitor' });
 });
 
+router.get('/monitoring/network-health', authenticate, blockFinanceArea, (req, res) => {
+  res.render('pages/network-health', { title: 'Network Health Monitor', user: req.user, active: 'network-health' });
+});
+
 router.get('/devices', authenticate, blockFinanceArea, (req, res) => {
   res.render('pages/devices', { title: 'Devices', user: req.user, active: 'devices' });
 });

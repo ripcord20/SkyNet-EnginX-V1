@@ -81,7 +81,7 @@
 
     <div class="nav-section">
       <span class="nav-section-title">MONITORING</span>
-      <% const _nNet = ['nms','traffic','queue','ippool','firewall'].includes(active); %>
+      <% const _nNet = ['network-health','nms','traffic','queue','ippool','firewall'].includes(active); %>
       <% const _nAcc = ['pppoe','wireguard','nas','hotspot','reseller-voucher'].includes(active); %>
       <% const _nDev = ['devices','device-monitor','ping','ping-monitor','olt-management','genieacs'].includes(active); %>
       <div class="nav-group <%= _nNet ? 'open' : '' %>" data-nav-group="noc-net">
@@ -90,6 +90,7 @@
           <svg class="nav-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="nav-group-children">
+          <a href="/monitoring/network-health" class="nav-sub <%= active === 'network-health' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>Network Health</span></a>
           <a href="/nms" class="nav-sub <%= active === 'nms' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>NMS Interface</span></a>
           <a href="/monitoring/traffic" class="nav-sub <%= active === 'traffic' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>Traffic</span></a>
           <a href="/monitoring/queue" class="nav-sub <%= active === 'queue' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>Simple Queue</span></a>
@@ -383,7 +384,7 @@
     <!-- MONITORING -->
     <div class="nav-section">
       <span class="nav-section-title">MONITORING</span>
-      <% const _aNet = ['nms','traffic','queue','ippool','firewall'].includes(active); %>
+      <% const _aNet = ['network-health','nms','traffic','queue','ippool','firewall'].includes(active); %>
       <% const _aAcc = ['pppoe','wireguard','nas','hotspot','voucher-template'].includes(active); %>
       <% const _aDev = ['devices','device-monitor','ping-monitor','ping','olt-management','genieacs'].includes(active); %>
       <div class="nav-group <%= _aNet ? 'open' : '' %>" data-nav-group="adm-net">
@@ -392,6 +393,7 @@
           <svg class="nav-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="nav-group-children">
+          <a href="/monitoring/network-health" class="nav-sub <%= active === 'network-health' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>Network Health</span></a>
           <a href="/nms" class="nav-sub <%= active === 'nms' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>NMS Interface</span></a>
           <a href="/monitoring/traffic" class="nav-sub <%= active === 'traffic' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>Traffic</span></a>
           <a href="/monitoring/queue" class="nav-sub <%= active === 'queue' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>Simple Queue</span></a>

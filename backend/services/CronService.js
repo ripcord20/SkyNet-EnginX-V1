@@ -598,6 +598,11 @@ class CronService {
     this._scheduleTelegramMonitoring().catch(e =>
       logger.error('[Cron:TelegramMonitoring] init: ' + (e.message || e)));
 
+    // Network Health Monitor — DEFAULT OFF. Job tetap dijadwalkan tapi
+    // Collector.runCycle() langsung return jika nhealth_enabled != 1.
+    this._scheduleNetworkHealth().catch(e =>
+      logger.error('[Cron:NetworkHealth] init: ' + (e.message || e)));
+
     // ── 17. Auto-generate Invoice Bulanan (tiap tgl 1 jam 01:30) ────────
     // Otomatis bikin invoice untuk semua customer aktif tiap awal bulan,
     // tanpa perlu admin klik tombol "Generate Invoice" di halaman billing.
@@ -1785,6 +1790,46 @@ class CronService {
   async rescheduleTelegramMonitoring() {
     await this._scheduleTelegramMonitoring();
     return this._tgInterval;
+  }
+
+  // ── Network Health Monitor: jadwalkan / jadwalkan ulang ─────────────
+  // Interval 60 / 120 / 300 detik. Saat OFF, job dihentikan total
+  // supaya tidak ada tick kosong yang menyentuh DB.
+  async _scheduleNetworkHealth() {
+    let cfg = { enabled: false, interval: 60 };
+    try {
+      cfg = await require('./NetworkHealthCollector').getConfig();
+    } catch (_) {}
+
+    if (this._nhJob) {
+      try { this._nhJob.stop(); } catch (_) {}
+      this.jobs = this.jobs.filter(j => j !== this._nhJob);
+      this._nhJob = null;
+    }
+
+    if (!cfg.enabled) {
+      this._nhInterval = 0;
+      logger.info('[Cron:NetworkHealth] OFF — tidak ada polling');
+      return 0;
+    }
+
+    const menit = cfg.interval >= 300 ? 5 : (cfg.interval >= 120 ? 2 : 1);
+    const expr = menit === 1 ? '* * * * *' : `*/${menit} * * * *`;
+    this._nhJob = cron.schedule(expr, async () => {
+      try {
+        await require('./NetworkHealthCollector').runCycle();
+      } catch (e) {
+        logger.error('[Cron:NetworkHealth] ' + (e.message || e));
+      }
+    });
+    this.jobs.push(this._nhJob);
+    this._nhInterval = menit;
+    logger.info(`[Cron:NetworkHealth] ON — interval ${menit} menit (${expr})`);
+    return menit;
+  }
+
+  async rescheduleNetworkHealth() {
+    return this._scheduleNetworkHealth();
   }
 
   // ── Stop semua jobs ─────────────────────────────────────────────────

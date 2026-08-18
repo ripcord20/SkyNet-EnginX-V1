@@ -83,6 +83,8 @@ const _financeBlockedPrefixes = [
   '/hotspot',
   '/pppoe',
   '/monitoring',
+  '/nms',
+  '/network-health',
   '/ping-monitor',
   '/host-monitor',
   '/isolir',
@@ -1056,6 +1058,8 @@ router.post('/app-settings', authenticate, demoGuard, async (req, res) => {
       'telegram_notif_device', 'telegram_notif_ont', 'telegram_notif_ip',
       'telegram_notif_pppoe',
       'telegram_interval',
+      // Network Health Monitor (ON/OFF + interval; default OFF)
+      'nhealth_enabled', 'nhealth_interval', 'nhealth_tier2', 'nhealth_tier3',
       // Push reminder tagihan otomatis (cron harian)
       'push_reminder_enabled',
       'push_reminder_send_hour', 'push_reminder_overdue_hour',
@@ -1108,12 +1112,16 @@ router.post('/app-settings', authenticate, demoGuard, async (req, res) => {
     let taxChanged = false;
     let brandChanged = false;
     let tgIntervalChanged = false;
+    let nhealthChanged = false;
     for (const key of allowed) {
       if (req.body[key] !== undefined) {
         await AppSetting.upsert({ key, value: String(req.body[key] || ''), type: 'string' });
         if (key.startsWith('tax_')) taxChanged = true;
         if (key === 'app_name' || key === 'company_name') brandChanged = true;
         if (key === 'telegram_interval') tgIntervalChanged = true;
+        if (key === 'nhealth_enabled' || key === 'nhealth_interval' || key === 'nhealth_tier2' || key === 'nhealth_tier3') {
+          nhealthChanged = true;
+        }
         // Mirror key emailtpl_invoice_* → invoice_email_* (sinkron dgn sistem lama)
         if (key.startsWith('emailtpl_')) {
           try {
@@ -1163,6 +1171,9 @@ router.post('/app-settings', authenticate, demoGuard, async (req, res) => {
     // Terapkan interval pengecekan Telegram baru tanpa restart
     if (tgIntervalChanged) {
       try { await require('../services/CronService').rescheduleTelegramMonitoring(); } catch (_) {}
+    }
+    if (nhealthChanged) {
+      try { await require('../services/CronService').rescheduleNetworkHealth(); } catch (_) {}
     }
     res.json({ success: true, message: 'Pengaturan disimpan' });
   } catch(e) { res.status(500).json({ success: false, message: e.message }); }
@@ -2183,6 +2194,9 @@ router.use('/mikrotik', authenticate, demoGuard, mikrotikRoutes);
 // ===== NMS (Interface Monitor) =====
 const nmsRoutes = require('./nms');
 router.use('/nms', authenticate, demoGuard, nmsRoutes);
+
+const networkHealthRoutes = require('./networkHealth');
+router.use('/network-health', networkHealthRoutes);
 
 // ===== RADIUS AAA =====
 const radiusRoutes = require('./radius');
