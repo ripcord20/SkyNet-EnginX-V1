@@ -2057,6 +2057,7 @@ router.get('/payments/chart',      authenticate, demoGuard, PaymentController.ch
 router.get('/payments/list',       authenticate, demoGuard, PaymentController.list);
 router.get('/payments/check-paid', authenticate, demoGuard, PaymentController.checkPaid);
 router.post('/payments/record',    authenticate, demoGuard, logActivity('create','payment'), PaymentController.record);
+router.post('/payments/record-batch', authenticate, demoGuard, logActivity('create','payment'), PaymentController.recordBatch.bind(PaymentController));
 router.delete('/payments/:id',     authenticate, demoGuard, authorize('superadmin','admin'), logActivity('delete','payment'), PaymentController.destroy);
 router.get('/payments/customers',  authenticate, demoGuard, PaymentController.searchCustomers);
 // Public invoice data — TANPA authenticate. Dipakai halaman /pub/invoice/:token

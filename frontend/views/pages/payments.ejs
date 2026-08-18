@@ -107,12 +107,31 @@
     .cust-icon { position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--d-muted);pointer-events:none; }
     .cust-inp  { padding-left:34px !important; }
     #custDropdown { display:none;position:absolute;z-index:999;background:#fff;border:1.5px solid var(--d-border);border-radius:12px;max-height:220px;overflow-y:auto;width:100%;top:calc(100% + 4px);box-shadow:0 12px 40px rgba(13,27,62,.15); }
-    .cust-item { padding:10px 13px;cursor:pointer;border-bottom:1px solid #f0f4ff;transition:background .1s;font-size:13px; }
+    .cust-item { padding:10px 13px;cursor:pointer;border-bottom:1px solid #f0f4ff;transition:background .1s;font-size:13px; display:flex; align-items:flex-start; gap:10px; }
     .cust-item:last-child { border-bottom:none; }
     .cust-item:hover { background:#f4f8ff; }
+    .cust-item.is-queued { background:#eff6ff; }
+    .cust-item .ci-check { width:16px;height:16px;margin-top:2px;accent-color:#2563eb;flex-shrink:0; cursor:pointer; }
+    .cust-item .ci-body { min-width:0; flex:1; }
     .cust-item .ci-name { font-weight:600; color:var(--d-text); }
     .cust-item .ci-sub  { font-size:11px; color:var(--d-muted); margin-top:1px; }
     #custInfo { display:none;margin-top:8px;padding:12px 13px;background:#f4f8ff;border:1px solid var(--d-border);border-radius:10px;font-size:12.5px; }
+    .pay-queue { margin-top:10px; border:1.5px solid #dbeafe; background:#fff; border-radius:12px; overflow:hidden; }
+    .pq-head { display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:#eff6ff; }
+    .pq-head span { font-size:11px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:#1d4ed8; }
+    .pq-clear { border:none; background:none; color:#64748b; font-size:11px; font-weight:700; cursor:pointer; font-family:inherit; }
+    .pq-clear:hover { color:#dc2626; }
+    .pq-item { display:flex; align-items:center; gap:8px; padding:8px 12px; border-top:1px solid #eef2f9; }
+    .pq-item.is-paid { background:#fffbeb; }
+    .pq-item .pq-cb { width:15px;height:15px;accent-color:#2563eb;flex-shrink:0; cursor:pointer; }
+    .pq-name { flex:1; min-width:0; }
+    .pq-name b { display:block; font-size:12.5px; color:#0d1b3e; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .pq-name small { display:block; font-size:10.5px; color:#6b7fa8; }
+    .pq-amt { width:96px; padding:6px 8px; border:1.5px solid var(--d-border); border-radius:8px; font-size:12px; font-family:inherit; text-align:right; }
+    .pq-amt:focus { border-color:var(--d-blue1); outline:none; }
+    .pq-rm { width:26px;height:26px;border:none;background:#fff1f2;color:#e11d48;border-radius:7px;cursor:pointer;font-size:14px;line-height:1; }
+    .pq-badge { font-size:10px;font-weight:800;padding:2px 7px;border-radius:99px;background:#fde68a;color:#92400e; }
+    .pq-total { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; border-top:1px solid #dbeafe; background:#f8faff; font-size:13px; font-weight:800; color:#0d1b3e; }
 
     /* Method pills */
     .method-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
@@ -434,7 +453,7 @@
             </div>
             <div>
               <div class="form-card-title">Input Payment</div>
-              <div class="form-card-sub">Input transaksi baru</div>
+              <div class="form-card-sub">Ceklis pelanggan, lalu lunasi sekaligus</div>
             </div>
           </div>
 
@@ -443,19 +462,27 @@
             <label class="pf-label">Pelanggan *</label>
             <div class="cust-wrap">
               <svg class="cust-icon" xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="M21 21l-4.35-4.35"/></svg>
-              <input type="text" id="custSearch" class="pf-input cust-inp" placeholder="Nama, CID, atau nomor HP..." autocomplete="off" oninput="searchCustomers(this.value)">
+              <input type="text" id="custSearch" class="pf-input cust-inp" placeholder="Cari lalu ceklis: nama, CID, atau HP..." autocomplete="off" oninput="searchCustomers(this.value)">
               <input type="hidden" id="selectedCustId">
               <div id="custDropdown"></div>
             </div>
             <div id="custInfo"></div>
             <div id="paidWarning"></div>
+            <div id="payQueueBox" class="pay-queue" style="display:none;">
+              <div class="pq-head">
+                <span>Akan dilunasi (<span id="pqCount">0</span>)</span>
+                <button type="button" class="pq-clear" onclick="clearPayQueue()">Hapus semua</button>
+              </div>
+              <div id="payQueueList"></div>
+              <div class="pq-total"><span>Total</span><span id="pqTotal">Rp 0</span></div>
+            </div>
           </div>
 
           <!-- Amount & Date -->
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-            <div class="pf-field">
+            <div class="pf-field" id="amountFieldWrap">
               <label class="pf-label">Jumlah (Rp) *</label>
-              <input type="text" id="payAmount" class="pf-input" placeholder="0" oninput="formatAmount(this)">
+              <input type="text" id="payAmount" class="pf-input" placeholder="0" oninput="formatAmount(this); onSingleAmountInput()">
             </div>
             <div class="pf-field">
               <label class="pf-label">Tanggal *</label>
@@ -490,10 +517,10 @@
           </div>
 
           <!-- Due date after -->
-          <div class="pf-field">
+          <div class="pf-field" id="dueFieldWrap">
             <label class="pf-label">Jatuh Tempo Baru *</label>
             <input type="date" id="payDueDate" class="pf-input">
-            <div style="font-size:11px;color:var(--d-muted);margin-top:4px;">Default: jatuh tempo pelanggan + 1 bulan. Bisa disesuaikan.</div>
+            <div style="font-size:11px;color:var(--d-muted);margin-top:4px;" id="dueFieldHint">Default: jatuh tempo pelanggan + 1 bulan. Bisa disesuaikan. Untuk beberapa pelanggan, jatuh tempo dihitung masing-masing.</div>
           </div>
 
           <!-- Period -->

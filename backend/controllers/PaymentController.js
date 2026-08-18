@@ -782,6 +782,91 @@ class PaymentController {
     }
   }
 
+  // ── Pelunasan kolektif (banyak pelanggan, satu perintah) ─────
+  async recordBatch(req, res) {
+    try {
+      const items = Array.isArray(req.body?.items) ? req.body.items : [];
+      if (!items.length) {
+        return res.status(400).json({ success: false, message: 'Ceklis minimal satu pelanggan' });
+      }
+      if (items.length > 50) {
+        return res.status(400).json({ success: false, message: 'Maksimal 50 pelanggan per pelunasan kolektif' });
+      }
+
+      const shared = {
+        payment_date: req.body.payment_date,
+        method: req.body.method,
+        bank: req.body.bank,
+        reference_no: req.body.reference_no,
+        send_wa: req.body.send_wa,
+        send_email: req.body.send_email,
+        notes: req.body.notes,
+        period_month: req.body.period_month,
+        period_year: req.body.period_year
+      };
+
+      const origBody = req.body;
+      const results = [];
+
+      for (const item of items) {
+        const customerId = item.customer_id || item.id;
+        if (!customerId) {
+          results.push({ customer_id: null, name: item.name || null, success: false, message: 'customer_id kosong' });
+          continue;
+        }
+        const amount = parseInt(String(item.amount ?? '').replace(/[^\d]/g, ''), 10) || 0;
+        if (!amount) {
+          results.push({ customer_id: customerId, name: item.name || null, success: false, message: 'Jumlah kosong' });
+          continue;
+        }
+        if (!item.due_date_after) {
+          results.push({ customer_id: customerId, name: item.name || null, success: false, message: 'Jatuh tempo baru kosong' });
+          continue;
+        }
+
+        req.body = {
+          ...shared,
+          customer_id: customerId,
+          amount,
+          due_date_after: item.due_date_after
+        };
+
+        const captured = await new Promise((resolve) => {
+          const fakeRes = {
+            status() { return this; },
+            json(payload) { resolve(payload || {}); return this; }
+          };
+          Promise.resolve(this.record(req, fakeRes)).catch((e) => {
+            resolve({ success: false, message: e.message });
+          });
+        });
+
+        results.push({
+          customer_id: customerId,
+          name: item.name || captured.data?.customer_name || null,
+          success: !!captured.success,
+          already_paid: !!captured.already_paid,
+          message: captured.message,
+          invoice_number: captured.data?.invoice_number || captured.invoice_number || null,
+          due_date_after: captured.data?.due_date_after || null
+        });
+      }
+
+      req.body = origBody;
+      const ok = results.filter(r => r.success).length;
+      const fail = results.length - ok;
+      return res.json({
+        success: ok > 0,
+        message: fail === 0
+          ? `${ok} pembayaran berhasil dicatat`
+          : `${ok} berhasil, ${fail} gagal/dilewati`,
+        data: { ok, fail, results }
+      });
+    } catch (e) {
+      return res.status(500).json({ success: false, message: e.message });
+    }
+  }
+
   // ── Delete payment ───────────────────────────────────────────
   async destroy(req, res) {
     const t = await sequelize.transaction();
