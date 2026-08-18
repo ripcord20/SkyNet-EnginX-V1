@@ -125,6 +125,33 @@ input, select, textarea { font-family: inherit; }
 
 .nav-icon { width: 20px; height: 20px; flex-shrink: 0; stroke-width: 1.8; }
 
+/* Folder-tree sidebar (labels italic + blue, nested like files) */
+#sidebar .nav-section {
+  padding: 4px 6px 6px;
+  margin: 0 8px 8px;
+  background: #f7fbff;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+}
+#sidebar .nav-section-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-style: italic;
+  font-size: 12px;
+  font-weight: 700;
+  color: #1d4ed8;
+  letter-spacing: 0;
+  text-transform: none;
+  padding: 7px 6px 4px;
+}
+#sidebar .nav-item {
+  font-style: italic;
+  color: #2563eb;
+  font-size: 12.5px;
+  padding: 5px 8px 5px 10px;
+}
+
 .nav-badge {
   margin-left: auto;
   font-size: 11px;
