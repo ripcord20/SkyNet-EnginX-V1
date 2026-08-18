@@ -179,6 +179,9 @@ router.get('/nms', authenticate, blockFinanceArea, (req, res) => {
   res.render('pages/nms', { title: 'NMS · Interface Monitor', user: req.user, active: 'nms' });
 });
 
+router.get('/network-health', authenticate, blockFinanceArea, (req, res) =>
+  res.redirect('/monitoring/network-health'));
+
 router.get('/monitoring/pppoe', authenticate, blockFinanceArea, (req, res) => {
   res.render('pages/pppoe', { title: 'PPPoE Sessions', user: req.user, active: 'pppoe' });
 });
