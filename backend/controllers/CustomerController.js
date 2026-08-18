@@ -157,6 +157,33 @@ class CustomerController {
         }
       } catch (e) { /* non-fatal: link bisa dibuat manual nanti */ }
 
+      // Field PPPoE khusus RADIUS — bukan kolom customers.
+      const pppoePassword = data.pppoe_password;
+      const pppoeProfile  = data.pppoe_profile;
+      delete data.pppoe_password;
+      delete data.pppoe_profile;
+
+      if (pppoePassword) {
+        const username = String(data.pppoe_username || '').trim();
+        if (!username) {
+          return res.status(400).json({ success: false, message: 'Username PPPoE wajib diisi' });
+        }
+        try {
+          const Radius = require('../services/RadiusService');
+          await Radius.provisionPppoe({
+            username,
+            password: pppoePassword,
+            profile: pppoeProfile,
+            framed_ip: data.static_ip || data.remoteAddress || null,
+          });
+        } catch (e) {
+          return res.status(400).json({
+            success: false,
+            message: 'Gagal simpan akun PPPoE ke RADIUS: ' + e.message
+          });
+        }
+      }
+
       const customer = await Customer.create(data);
       const full = await Customer.findByPk(customer.id, {
         include: [{ model: Package, as: 'package' }]
@@ -260,11 +287,31 @@ class CustomerController {
       delete sanitized.customer_id;           // hanya boleh diubah via updatePortalCredentials (validasi unique)
       delete sanitized.last_portal_login;     // diset otomatis oleh sistem saat login
       delete sanitized.public_link_token;     // hanya via endpoint payment-link (generate/revoke)
+      const pppoePassword = sanitized.pppoe_password;
+      const pppoeProfile  = sanitized.pppoe_profile;
+      delete sanitized.pppoe_password;
+      delete sanitized.pppoe_profile;
 
       await customer.update(sanitized);
       const full = await Customer.findByPk(customer.id, {
         include: [{ model: Package, as: 'package' }]
       });
+
+      if (pppoePassword && full.pppoe_username) {
+        try {
+          const Radius = require('../services/RadiusService');
+          await Radius.provisionPppoe({
+            username: full.pppoe_username,
+            password: pppoePassword,
+            profile: pppoeProfile,
+            framed_ip: full.static_ip || null,
+            pkg: full.package,
+            disabled: full.status === 'isolated' || full.isolir_status === 'isolated'
+          });
+        } catch (e) {
+          console.error('[Customer] RADIUS PPPoE update:', e.message);
+        }
+      }
 
       // Auto-sync ke InfrastructurePoint. Full sync mode:
       //   - lat/lng ada → create / update point
@@ -525,49 +572,30 @@ class CustomerController {
 
         if (!oldUsername) {
           routerStatus = 'skipped';
-          routerMessage = 'Customer tidak punya pppoe_username — tidak ada secret untuk dihapus';
-        } else if (!routerId) {
-          routerStatus = 'skipped';
-          routerMessage = 'Customer tidak punya mikrotik_id — tidak tahu router mana yang harus dicek';
+          routerMessage = 'Customer tidak punya pppoe_username — tidak ada akun RADIUS/secret untuk dihapus';
         } else {
-          // Coba hapus secret di router
-          const { getMikrotikInstanceByDevice } = require('../services/MikrotikService');
-          let mt;
           try {
-            mt = await getMikrotikInstanceByDevice(routerId);
-          } catch (err) {
-            return res.status(502).json({
-              success: false,
-              message: `Tidak bisa konek ke router: ${err.message}. Customer TIDAK dihapus untuk konsistensi.`
-            });
+            const Radius = require('../services/RadiusService');
+            await Radius.deleteUser(oldUsername);
+            routerStatus = 'deleted';
+            routerMessage = `Akun RADIUS "${oldUsername}" dihapus`;
+          } catch (e) {
+            console.warn('[Customer] RADIUS delete:', e.message);
           }
 
-          let secrets;
-          try {
-            secrets = await mt.getPPPoESecrets();
-          } catch (err) {
-            return res.status(502).json({
-              success: false,
-              message: `Gagal ambil daftar secret dari router: ${err.message}. Customer TIDAK dihapus untuk konsistensi.`
-            });
-          }
-
-          const targetSecret = (secrets || []).find(s => s.name === oldUsername);
-          if (!targetSecret) {
-            // Secret tidak ada di router — mungkin sudah dihapus manual.
-            // Lanjutkan delete DB dengan info ini.
-            routerStatus = 'not_found';
-            routerMessage = `Secret "${oldUsername}" tidak ada di router (mungkin sudah dihapus manual)`;
-          } else {
+          if (routerId) {
             try {
-              await mt.deletePPPoESecret(targetSecret.id);
-              routerStatus = 'deleted';
-              routerMessage = `Secret "${oldUsername}" berhasil dihapus dari router`;
+              const { getMikrotikInstanceByDevice } = require('../services/MikrotikService');
+              const mt = await getMikrotikInstanceByDevice(routerId);
+              const secrets = await mt.getPPPoESecrets();
+              const targetSecret = (secrets || []).find(s => s.name === oldUsername);
+              if (targetSecret) {
+                await mt.deletePPPoESecret(targetSecret.id);
+                routerStatus = 'deleted';
+                routerMessage = `Akun RADIUS & leftover /ppp/secret "${oldUsername}" dihapus`;
+              }
             } catch (err) {
-              return res.status(502).json({
-                success: false,
-                message: `Gagal hapus secret di router: ${err.message}. Customer TIDAK dihapus untuk konsistensi.`
-              });
+              console.warn('[Customer] leftover MikroTik secret:', err.message);
             }
           }
         }
@@ -810,9 +838,19 @@ class CustomerController {
         }
       }
 
-      // ── Sync ke router kalau diminta ─────────────────────────────
+      // ── Sync ke RADIUS (sumber auth PPPoE) + leftover /ppp/secret ──
       let syncedRouter = false;
       let routerWarning = null;
+
+      if (sync_to_router && oldUsername) {
+        try {
+          const Radius = require('../services/RadiusService');
+          await Radius.renameUser(oldUsername, isClearing ? '' : trimmedNew);
+          syncedRouter = true;
+        } catch (e) {
+          routerWarning = 'RADIUS: ' + e.message;
+        }
+      }
 
       if (sync_to_router) {
         // Butuh: oldUsername (untuk lookup) dan customer.mikrotik_id (router yang punya secret)
@@ -836,11 +874,9 @@ class CustomerController {
           });
         }
         if (!customer.mikrotik_id) {
-          return res.status(400).json({
-            success: false,
-            message: 'Customer tidak punya router MikroTik terhubung. Set kolom "Router MikroTik" di profil customer dulu, atau gunakan mode "DB only".'
-          });
-        }
+          routerWarning = (routerWarning ? routerWarning + '; ' : '') +
+            'Router MikroTik tidak di-set — leftover /ppp/secret tidak dicek';
+        } else {
 
         // Cari secret di router by name
         const { getMikrotikInstanceByDevice } = require('../services/MikrotikService');
@@ -880,13 +916,9 @@ class CustomerController {
               synced_router: false
             });
           }
-          return res.status(404).json({
-            success: false,
-            message: `Secret PPPoE "${oldUsername}" tidak ditemukan di router. Mungkin sudah di-rename manual atau dihapus. Pilih mode "DB only" untuk update database saja.`
-          });
-        }
-
-        if (isClearing) {
+          routerWarning = (routerWarning ? routerWarning + '; ' : '') +
+            `Secret "${oldUsername}" tidak ada di /ppp/secret (akun RADIUS saja)`;
+        } else if (isClearing) {
           // Hapus secret di router
           try {
             await mt.deletePPPoESecret(targetSecret.id);
@@ -916,6 +948,7 @@ class CustomerController {
               message: `Gagal rename secret di router: ${err.message}. Database tidak di-update untuk konsistensi.`
             });
           }
+        }
         }
       }
 

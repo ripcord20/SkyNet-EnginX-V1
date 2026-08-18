@@ -5,7 +5,7 @@
  *
  * Strategi:
  *   - Aktifkan MikroTik Web Proxy (transparent mode, port 8080)
- *   - DST-NAT redirect HTTP (port 80) dari address-list FLAYNET-ISOLIR
+ *   - DST-NAT redirect HTTP (port 80) dari address-list SKYNET-ISOLIR
  *     ke port web proxy (8080)
  *   - Web Proxy Access rule: catch-all `action=deny redirect-to=<URL>`
  *     (proxy access TIDAK support src-address-list, hanya src-address.
@@ -31,15 +31,15 @@
  *   1. /ip proxy → enabled, port 8080
  *   2. /ip proxy access → catch-all deny+redirect rule (single rule)
  *   3. /ip firewall nat → redirect port 80 ke 8080 untuk customer isolir
- *      (filter src-address-list=FLAYNET-ISOLIR di sini, BUKAN di proxy)
+ *      (filter src-address-list=SKYNET-ISOLIR di sini, BUKAN di proxy)
  * ────────────────────────────────────────────────────────────────────
  */
 const { sequelize } = require('../models');
 
 // ── Konstanta ──
 const PROXY_PORT = 8080;
-const TAG_NAT_REDIR  = 'FLAYNET-ISOLIR-WP-NAT';   // NAT redirect port 80 → 8080
-const TAG_PROXY_RULE = 'FLAYNET-ISOLIR-WP-DENY';  // Proxy access rule
+const TAG_NAT_REDIR  = 'SKYNET-ISOLIR-WP-NAT';   // NAT redirect port 80 → 8080
+const TAG_PROXY_RULE = 'SKYNET-ISOLIR-WP-DENY';  // Proxy access rule
 
 // ════════════════════════════════════════════════════════════════════════
 // HELPER untuk akses settings dari DB
@@ -205,7 +205,7 @@ async function setupIsolirWebProxy(api) {
       '=chain=dstnat',
       '=protocol=tcp',
       '=dst-port=80',
-      '=src-address-list=FLAYNET-ISOLIR',
+      '=src-address-list=SKYNET-ISOLIR',
       '=action=redirect',
       '=to-ports=' + String(PROXY_PORT),
       '=comment=' + TAG_NAT_REDIR,

@@ -895,37 +895,10 @@ async function _saveCustomerInner() {
 
   btn.disabled = true; btn.textContent = 'Menyimpan...';
 
-  // ═══ STEP 1: Buat akun PPPoE di MikroTik dulu (kalau diminta) ═══
-  // Alasan: kalau gagal, jangan lanjutkan create customer (rollback gampang).
+  // ═══ STEP 1: Siapkan kredensial PPPoE untuk RADIUS (disimpan bersama customer) ═══
   let pppoeStatus = 'skipped';
   if (pppoeData) {
-    btn.textContent = 'Membuat akun PPPoE...';
-    try {
-      const url = '/mikrotik/pppoe/secrets?device_id=' + encodeURIComponent(pppoeData.device_id);
-      const ppRes = await App.api(url, {
-        method: 'POST',
-        body: JSON.stringify({
-          name:          pppoeData.name,
-          password:      pppoeData.password,
-          profile:       pppoeData.profile,
-          service:       pppoeData.service,
-          localAddress:  pppoeData.localAddress,
-          remoteAddress: pppoeData.remoteAddress,
-          comment:       pppoeData.comment
-        })
-      });
-      if (!ppRes?.success) {
-        const errMsg = ppRes?.message || 'Gagal membuat akun PPPoE';
-        App.showToast('PPPoE gagal: ' + errMsg + '. Customer TIDAK disimpan.', 'error');
-        btn.disabled = false; btn.textContent = 'Simpan Customer';
-        return;
-      }
-      pppoeStatus = 'created';
-    } catch (e) {
-      App.showToast('PPPoE gagal: ' + e.message + '. Customer TIDAK disimpan.', 'error');
-      btn.disabled = false; btn.textContent = 'Simpan Customer';
-      return;
-    }
+    pppoeStatus = 'pending';
   }
 
   // ═══ STEP 2: Simpan customer ═══
@@ -1051,6 +1024,12 @@ async function _saveCustomerInner() {
   if (_custEditId || createPppoe) {
     body.pppoe_username = document.getElementById('custPPPoE')?.value || '';
   }
+  if (createPppoe && pppoeData) {
+    body.pppoe_password = pppoeData.password;
+    body.pppoe_profile  = pppoeData.profile;
+    if (pppoeData.device_id && !body.mikrotik_id) body.mikrotik_id = pppoeData.device_id;
+    if (pppoeData.remoteAddress && !body.static_ip) body.static_ip = pppoeData.remoteAddress;
+  }
   if (sendWA) body.send_wa_welcome = true;
   if (sendEmail) body.send_email_welcome = true;
   // Kalau PPPoE rename sudah di-handle oleh endpoint khusus di atas,
@@ -1094,8 +1073,8 @@ async function _saveCustomerInner() {
     let toastType = 'success';
 
     // Info status pembuatan PPPoE
-    if (pppoeStatus === 'created') {
-      msg += ' • Akun PPPoE dibuat ✓';
+    if (pppoeStatus === 'pending' || pppoeStatus === 'created') {
+      msg += ' • Akun PPPoE RADIUS dibuat ✓';
     }
 
     // Info status auto-sync ke peta infrastruktur
@@ -1147,8 +1126,7 @@ async function _saveCustomerInner() {
     // Customer gagal disimpan tapi PPPoE sudah dibuat — beri warning supaya admin tahu
     if (pppoeStatus === 'created') {
       App.showToast(
-        'PPPoE sudah dibuat di MikroTik tapi customer gagal disimpan: ' + (data?.message || 'Unknown error') +
-        '. Silakan hapus secret PPPoE manual atau ulangi simpan customer.',
+        'Gagal simpan akun PPPoE ke RADIUS: ' + (data?.message || 'Unknown error'),
         'error'
       );
     } else {

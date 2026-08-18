@@ -324,6 +324,18 @@ async function processItem(item, ctx) {
     const res = await mt.createPPPoESecret(payload);
     let mtId = extractMikrotikId(res);
 
+    try {
+      const Radius = require('./RadiusService');
+      await Radius.provisionPppoe({
+        username: uname,
+        password: payload.password,
+        profile: wantProfile,
+        framed_ip: item.remote_address || null,
+      });
+    } catch (re) {
+      logger.warn(`[PppoeBulk] RADIUS ${uname}: ${re.message}`);
+    }
+
     // MikroTik sering menutup koneksi setelah write sukses; MikrotikService
     // menanganinya dengan `return null`. Akibatnya .id tidak ikut terbawa,
     // dan tanpa .id fitur rollback tidak bisa menghapus secret ini.

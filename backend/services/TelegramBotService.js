@@ -1927,15 +1927,18 @@ async function _wizCreatePppoeExecute(chatId, allowControl) {
   const d = w.data;
   _wizClear(chatId);
   try {
-    const { getMikrotikInstanceByDevice } = require('./MikrotikService');
-    const mt = await getMikrotikInstanceByDevice(d.deviceId);
-    await mt.createPPPoESecret({ name: d.username, password: d.password, profile: d.profile, service: 'pppoe' });
-    await _audit(chatId, 'pppoe_create', `Buat PPPoE user ${d.username} (profile ${d.profile}) di ${d.deviceName}`, { targetType: 'device', targetId: d.deviceId, newData: { username: d.username, profile: d.profile } });
+    const Radius = require('./RadiusService');
+    await Radius.provisionPppoe({
+      username: d.username,
+      password: d.password,
+      profile: d.profile,
+    });
+    await _audit(chatId, 'pppoe_create', `Buat PPPoE user ${d.username} (profile ${d.profile}) di RADIUS`, { targetType: 'device', targetId: d.deviceId, newData: { username: d.username, profile: d.profile } });
     await _reply(chatId,
-      `<b>PPPoE user berhasil dibuat.</b>\n\n` +
-      `Router   : <b>${esc(d.deviceName)}</b>\n` +
+      `<b>PPPoE user disimpan di RADIUS.</b>\n\n` +
       `Username : <code>${esc(d.username)}</code>\n` +
-      `Profile  : <b>${esc(d.profile)}</b>`);
+      `Profile  : <b>${esc(d.profile)}</b>\n` +
+      `Auth lewat FreeRADIUS, bukan /ppp/secret MikroTik.`);
   } catch (e) {
     await _reply(chatId, 'Gagal membuat PPPoE user: ' + esc(e.message || 'error') +
       '\nKemungkinan username sudah ada atau profile tidak valid.');

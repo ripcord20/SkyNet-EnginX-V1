@@ -119,12 +119,16 @@ class PPPoEController {
   // POST /api/mikrotik/pppoe/secrets
   async createSecret(req, res) {
     try {
-      const mt = await getMt(req);
       if (!req.body.name)     return res.status(400).json({ success:false, message:'Username wajib diisi' });
       if (!req.body.password) return res.status(400).json({ success:false, message:'Password wajib diisi' });
-      await mt.createPPPoESecret(req.body);
-      // null response = ECONNRESET after write = operation succeeded
-      res.json({ success: true, message: 'User PPPoE berhasil dibuat' });
+      const Radius = require('../services/RadiusService');
+      await Radius.provisionPppoe({
+        username: req.body.name,
+        password: req.body.password,
+        profile: req.body.profile,
+        framed_ip: req.body.remoteAddress || req.body['remote-address'] || null,
+      });
+      res.json({ success: true, message: 'User PPPoE disimpan di RADIUS (bukan /ppp/secret MikroTik)' });
     } catch (err) {
       logger.error('PPPoE createSecret error:', err.message);
       res.status(400).json({ success:false, message: err.message, detail: String(err.message) });

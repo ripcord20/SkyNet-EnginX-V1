@@ -18,7 +18,7 @@
  *   /ppp profile add name=isolir-profile
  *     local-address=10.255.255.1
  *     remote-address=isolir-pool
- *     address-list=FLAYNET-ISOLIR
+ *     address-list=SKYNET-ISOLIR
  *     rate-limit=128k/128k
  * ────────────────────────────────────────────────────────────────────
  */
@@ -116,7 +116,7 @@ async function setupIsolirProfile(api, sequelize) {
       '=name=' + cfg.profileName,
       '=local-address=' + cfg.localAddr,
       '=remote-address=' + cfg.poolName,
-      '=address-list=FLAYNET-ISOLIR',
+      '=address-list=SKYNET-ISOLIR',
       '=rate-limit=' + cfg.rateLimit
     ];
     if (existing.length === 0) {
@@ -129,7 +129,7 @@ async function setupIsolirProfile(api, sequelize) {
         '=.id=' + existing[0]['.id'],
         '=local-address=' + cfg.localAddr,
         '=remote-address=' + cfg.poolName,
-        '=address-list=FLAYNET-ISOLIR',
+        '=address-list=SKYNET-ISOLIR',
         '=rate-limit=' + cfg.rateLimit
       ]);
       results.push(`• PPP profile "${cfg.profileName}" sudah ada (sinkron field)`);
@@ -154,10 +154,26 @@ async function isolirPPPoEUser(api, pppoeUsername, sequelize, customerId) {
   if (!pppoeUsername) throw new Error('PPPoE username kosong');
   const cfg = await getPPPoESettings(sequelize);
 
-  // ── 1. Ambil profile asli dari /ppp/secret ──
+  // ── 1. Ambil profile asli dari /ppp/secret (opsional — user RADIUS tidak punya secret) ──
   const secrets = await runWithRetry(api, ['/ppp/secret/print', '?name=' + pppoeUsername]);
   if (secrets.length === 0) {
-    throw new Error(`PPP secret "${pppoeUsername}" tidak ditemukan di MikroTik`);
+    let kicked = 0;
+    try {
+      const active = await runWithRetry(api, ['/ppp/active/print', '?name=' + pppoeUsername]);
+      for (const sess of active) {
+        if (sess['.id']) {
+          await runWithRetry(api, ['/ppp/active/remove', '=.id=' + sess['.id']]);
+          kicked++;
+        }
+      }
+    } catch (_) { /* kick gagal tidak fatal */ }
+    return {
+      success: true,
+      originalProfile: null,
+      kicked,
+      radiusOnly: true,
+      message: `PPP secret tidak ada di MikroTik (akun RADIUS); ${kicked} session di-kick`
+    };
   }
   const secret = secrets[0];
   const originalProfile = String(secret.profile || 'default');
@@ -213,7 +229,22 @@ async function restorePPPoEUser(api, pppoeUsername, originalProfile) {
 
   const secrets = await runWithRetry(api, ['/ppp/secret/print', '?name=' + pppoeUsername]);
   if (secrets.length === 0) {
-    throw new Error(`PPP secret "${pppoeUsername}" tidak ditemukan di MikroTik`);
+    let kicked = 0;
+    try {
+      const active = await runWithRetry(api, ['/ppp/active/print', '?name=' + pppoeUsername]);
+      for (const sess of active) {
+        if (sess['.id']) {
+          await runWithRetry(api, ['/ppp/active/remove', '=.id=' + sess['.id']]);
+          kicked++;
+        }
+      }
+    } catch (_) { /* kick gagal tidak fatal */ }
+    return {
+      success: true,
+      kicked,
+      radiusOnly: true,
+      message: `PPP secret tidak ada di MikroTik (akun RADIUS); ${kicked} session di-kick`
+    };
   }
   const secret = secrets[0];
   if (!secret['.id']) throw new Error('PPP secret tidak punya ID');

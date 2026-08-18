@@ -15,7 +15,8 @@
  * ────────────────────────────────────────────────────────────────────
  */
 
-const BINDING_COMMENT_PREFIX = 'FLAYNET-HS-BIND';
+const BINDING_COMMENT_PREFIX = 'SKYNET-HS-BIND';
+const LEGACY_BINDING_PREFIXES = ['FLAYNET-HS-BIND'];
 const BINDING_PATH = '/ip/hotspot/ip-binding';
 
 function normalizeMac(mac) {
@@ -40,11 +41,12 @@ async function mtListBindings(mt) {
 function mtMatch(bindings, { mac, address, customerId }) {
   const macN = normalizeMac(mac);
   const addr = (address || '').trim();
-  const cmt  = customerId ? `${BINDING_COMMENT_PREFIX}-${customerId}` : null;
+  const prefixes = [BINDING_COMMENT_PREFIX, ...LEGACY_BINDING_PREFIXES];
+  const comments = customerId ? prefixes.map(p => `${p}-${customerId}`) : [];
   return bindings.filter(b =>
     (macN && b.mac === macN) ||
     (addr && b.address === addr) ||
-    (cmt && b.comment === cmt)
+    (comments.length && comments.includes(b.comment))
   );
 }
 

@@ -616,6 +616,45 @@ async function listSessions({ activeOnly = true, search, limit = 200 } = {}) {
   return sequelize.query(sql, { replacements: repl, type: QueryTypes.SELECT });
 }
 
+async function renameUser(oldUsername, newUsername) {
+  await ensureSchema();
+  const oldU = String(oldUsername || '').trim();
+  const newU = String(newUsername || '').trim();
+  if (!oldU) return false;
+  if (!newU) {
+    await deleteUser(oldU);
+    return true;
+  }
+  if (oldU === newU) return false;
+  const existing = await getUser(oldU);
+  if (!existing) return false;
+  await upsertUser({
+    username: newU,
+    password: existing.password || null,
+    groupname: existing.groupname,
+    framed_ip: existing.framed_ip,
+    disabled: existing.disabled
+  });
+  await deleteUser(oldU);
+  return true;
+}
+
+async function provisionPppoe({ username, password, profile, framed_ip, pkg, disabled }) {
+  await ensureSchema();
+  const user = String(username || '').trim();
+  if (!user) throw new Error('Username PPPoE wajib diisi');
+  if (!password) throw new Error('Password PPPoE wajib diisi');
+  const groupname = profile ? String(profile).slice(0, 64) : null;
+  if (groupname) await ensureProfile(groupname, pkg || null);
+  return upsertUser({
+    username: user,
+    password,
+    groupname,
+    framed_ip: framed_ip || null,
+    disabled: !!disabled
+  });
+}
+
 module.exports = {
   ensureSchema,
   getSettings,
@@ -632,8 +671,11 @@ module.exports = {
   deleteUser,
   disableUser,
   enableUser,
+  renameUser,
+  provisionPppoe,
   syncCustomers,
   listProfiles,
+  ensureProfile,
   saveProfile,
   deleteProfile,
   listSessions,

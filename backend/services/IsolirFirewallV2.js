@@ -2,8 +2,8 @@
  * IsolirFirewallV2.js
  * ────────────────────────────────────────────────────────────────────
  * Manajemen firewall isolir generasi-2 — strategi:
- *   1. Address-list FLAYNET-ISOLIR : IP pelanggan diisolir
- *   2. Address-list FLAYNET-BYPASS : IP/CIDR yang masih boleh diakses
+ *   1. Address-list SKYNET-ISOLIR : IP pelanggan diisolir
+ *   2. Address-list SKYNET-BYPASS : IP/CIDR yang masih boleh diakses
  *      (gateway pembayaran, DNS publik, situs ISP, dll)
  *   3. NAT chain dstnat: redirect HTTP (port 80) dari ISOLIR ke
  *      halaman isolir, KECUALI tujuan ada di BYPASS
@@ -17,17 +17,17 @@
  *   - Global  (tabel `isolir_bypass_global`)   — berlaku ke semua router
  *   - Per-router (tabel `isolir_bypass_router`) — override khusus
  *   - Saat sync ke MikroTik: merged (global ∪ per-router) → push ke
- *     address-list FLAYNET-BYPASS dengan timeout=0 (permanent)
+ *     address-list SKYNET-BYPASS dengan timeout=0 (permanent)
  * ────────────────────────────────────────────────────────────────────
  */
 const { sequelize } = require('../models');
 
 // ── Konstanta address-list & comment marker ──
-const LIST_ISOLIR  = 'FLAYNET-ISOLIR';
-const LIST_BYPASS  = 'FLAYNET-BYPASS';
-const TAG_NAT      = 'FLAYNET-ISOLIR-NAT';        // dstnat redirect HTTP
-const TAG_DROP_FWD = 'FLAYNET-ISOLIR-DROP-FWD';   // drop forward (selain bypass)
-const TAG_BYPASS_FWD = 'FLAYNET-ISOLIR-ALLOW-BYPASS'; // allow forward ke bypass (priority tinggi)
+const LIST_ISOLIR  = 'SKYNET-ISOLIR';
+const LIST_BYPASS  = 'SKYNET-BYPASS';
+const TAG_NAT      = 'SKYNET-ISOLIR-NAT';        // dstnat redirect HTTP
+const TAG_DROP_FWD = 'SKYNET-ISOLIR-DROP-FWD';   // drop forward (selain bypass)
+const TAG_BYPASS_FWD = 'SKYNET-ISOLIR-ALLOW-BYPASS'; // allow forward ke bypass (priority tinggi)
 
 // Default bypass entries yang di-seed saat schema setup pertama kali.
 // IP server DIGSnet sendiri WAJIB ada (kalau tidak halaman isolir tidak bisa diakses!)
@@ -273,10 +273,15 @@ async function runWithRetry(api, words, maxRetry = 2) {
  */
 async function purgeOldRules(api) {
   const tags = [
+    'SKYNET-ISOLIR-NAT', 'SKYNET-ISOLIR-DROP-FWD',
+    'SKYNET-ISOLIR-ALLOW-BYPASS',
+    'SKYNET-BLOCK-SRC', 'SKYNET-BLOCK-DST',
+    'SKYNET-ISOLIR-WP-NAT', 'SKYNET-ISOLIR-WP-DENY',
     'FLAYNET-ISOLIR-NAT', 'FLAYNET-ISOLIR-DROP-FWD',
     'FLAYNET-ISOLIR-ALLOW-BYPASS',
-    'FLAYNET-BLOCK-SRC', 'FLAYNET-BLOCK-DST',     // legacy v1 drop-only
-    'WAU-BLOCK-SRC', 'WAU-BLOCK-DST',              // legacy original
+    'FLAYNET-BLOCK-SRC', 'FLAYNET-BLOCK-DST',
+    'FLAYNET-ISOLIR-WP-NAT', 'FLAYNET-ISOLIR-WP-DENY',
+    'WAU-BLOCK-SRC', 'WAU-BLOCK-DST',
   ];
   let removed = 0;
 
@@ -310,7 +315,7 @@ async function purgeOldRules(api) {
 }
 
 /**
- * Sync address-list FLAYNET-BYPASS di MikroTik dengan merged list dari DB.
+ * Sync address-list SKYNET-BYPASS di MikroTik dengan merged list dari DB.
  * Strategi: hapus semua entry yang dibuat sistem (comment ber-prefix BYPASS-),
  * lalu tambahkan ulang dari merged list.
  */
@@ -318,16 +323,18 @@ async function syncBypassList(api, deviceId) {
   const merged = await getMergedBypassList(deviceId);
   let added = 0, removed = 0;
 
-  // Hapus semua entry FLAYNET-BYPASS yang ada
-  try {
-    const existing = await runWithRetry(api, ['/ip/firewall/address-list/print', '?list=' + LIST_BYPASS]);
-    for (const e of existing) {
-      if (e['.id']) {
-        await runWithRetry(api, ['/ip/firewall/address-list/remove', '=.id=' + e['.id']]);
-        removed++;
+  // Hapus entry bypass lama (FLAYNET/WAU) supaya tidak dobel dengan SKYNET-BYPASS
+  for (const legacyList of ['FLAYNET-BYPASS', 'WAU-BYPASS', LIST_BYPASS]) {
+    try {
+      const existing = await runWithRetry(api, ['/ip/firewall/address-list/print', '?list=' + legacyList]);
+      for (const e of existing) {
+        if (e['.id']) {
+          await runWithRetry(api, ['/ip/firewall/address-list/remove', '=.id=' + e['.id']]);
+          removed++;
+        }
       }
-    }
-  } catch (_) { /* abaikan */ }
+    } catch (_) { /* abaikan */ }
+  }
 
   // Tambah ulang dari merged list
   for (const entry of merged) {
@@ -353,7 +360,7 @@ async function syncBypassList(api, deviceId) {
  * Setup full firewall isolir di device — DST-NAT redirect HTTP + filter rules + bypass.
  *
  * Yang akan ditambahkan ke MikroTik:
- *   1. Address-list FLAYNET-BYPASS (sync dari DB)
+ *   1. Address-list SKYNET-BYPASS (sync dari DB)
  *   2. NAT rule: dstnat src=ISOLIR dst=!BYPASS proto=tcp dport=80 → dst-nat to <halaman_isolir>
  *   3. Filter forward: src=ISOLIR dst=BYPASS action=accept (whitelist priority)
  *   4. Filter forward: src=ISOLIR action=drop (catch-all yang sudah masuk ISOLIR tapi tidak ke bypass)
@@ -720,7 +727,7 @@ async function deleteRouterBypass(deviceId, entryId) {
 //            cocokkan ke customer.ont_mac.
 //            Cocok untuk static IP via DHCP atau ONT mode bridge.
 //
-//   Layer 4: address-list FLAYNET-ISOLIR comment
+//   Layer 4: address-list SKYNET-ISOLIR comment
 //            Saat customer di-isolir, comment di address-list di-set ke
 //            customer_id. Kalau IP ada di list isolir, ambil customer
 //            dari comment.
@@ -773,7 +780,7 @@ async function lookupCustomerByIp(ip) {
       const byDhcp = await _lookupByDhcpLease(api, ip);
       if (byDhcp) { try { api.close(); } catch {} return byDhcp; }
 
-      // ── Layer 4: address-list FLAYNET-ISOLIR comment ──────────────
+      // ── Layer 4: address-list SKYNET-ISOLIR comment ──────────────
       const byList = await _lookupByAddressList(api, ip);
       if (byList) { try { api.close(); } catch {} return byList; }
 
@@ -864,20 +871,24 @@ async function _lookupByDhcpLease(api, ip) {
   return null;
 }
 
-// ── Layer 4: cek address-list FLAYNET-ISOLIR pakai comment ──
+// ── Layer 4: cek address-list SKYNET-ISOLIR pakai comment ──
 async function _lookupByAddressList(api, ip) {
   try {
-    const entries = await runWithRetry(api, [
-      '/ip/firewall/address-list/print',
-      '?list=' + LIST_ISOLIR,
-      '?address=' + ip
-    ]);
+    const lists = [LIST_ISOLIR, 'FLAYNET-ISOLIR', 'WAU-ISOLIR'];
+    let entries = [];
+    for (const list of lists) {
+      entries = await runWithRetry(api, [
+        '/ip/firewall/address-list/print',
+        '?list=' + list,
+        '?address=' + ip
+      ]);
+      if (entries && entries.length) break;
+    }
     if (!entries || !entries.length) return null;
     const comment = entries[0].comment || '';
-    // Comment format yang di-set IsolirService.isolirCustomer:
-    //   "FLAYNET-ISOLIR-<customer_id>"
-    // Note: ada juga legacy format "WAU-ISOLIR-..." yang dimigrate ke FLAYNET-.
-    const m = comment.match(/(?:FLAYNET|WAU)-ISOLIR-([^\s|,]+)/);
+    // Comment format: "SKYNET-ISOLIR-<customer_id>"
+    // Legacy: FLAYNET-ISOLIR-... / WAU-ISOLIR-...
+    const m = comment.match(/(?:SKYNET|FLAYNET|WAU)-ISOLIR-([^\s|,]+)/);
     if (!m) return null;
     const customerId = m[1];
 

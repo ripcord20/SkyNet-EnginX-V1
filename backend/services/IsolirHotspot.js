@@ -1,7 +1,7 @@
 /**
  * IsolirHotspot.js
  * ────────────────────────────────────────────────────────────────────
- * Manage Hotspot server "FLAYNET-ISOLIR-HS" untuk captive portal isolir.
+ * Manage Hotspot server "SKYNET-ISOLIR-HS" untuk captive portal isolir.
  *
  * Strategi:
  *   - Buat hotspot server terpisah dari hotspot voucher (kalau ada)
@@ -12,8 +12,8 @@
  *
  * Pendekatan tepat untuk MikroTik:
  *   1. /ip pool isolir-pool (sudah ada dari IsolirPPPoE.js)
- *   2. /ip hotspot profile "flaynet-isolir-profile" - login page custom
- *   3. /ip hotspot server "FLAYNET-ISOLIR-HS" bound ke interface
+ *   2. /ip hotspot profile "skynet-isolir-profile" - login page custom
+ *   3. /ip hotspot server "SKYNET-ISOLIR-HS" bound ke interface
  *   4. /ip hotspot walled-garden: domains/IPs yang boleh diakses tanpa login
  *   5. /ip hotspot walled-garden ip: address-list bypass
  *   6. Bind hotspot ke interface "<all-ppp>" supaya PPPoE customers ter-handle
@@ -32,12 +32,12 @@
 const { sequelize } = require('../models');
 
 // ── Konstanta ──
-const HOTSPOT_SERVER_NAME  = 'FLAYNET-ISOLIR-HS';
-const HOTSPOT_PROFILE_NAME = 'flaynet-isolir-profile';
-const HOTSPOT_USER_PROFILE = 'flaynet-isolir-user';
-const HOTSPOT_HTML_DIR     = 'flaynet-isolir';        // /flaynet-isolir/ di MikroTik filesystem
+const HOTSPOT_SERVER_NAME  = 'SKYNET-ISOLIR-HS';
+const HOTSPOT_PROFILE_NAME = 'skynet-isolir-profile';
+const HOTSPOT_USER_PROFILE = 'skynet-isolir-user';
+const HOTSPOT_HTML_DIR     = 'skynet-isolir';        // /skynet-isolir/ di MikroTik filesystem
 const HOTSPOT_LOGIN_USER   = 'isolir-guest';          // Auto-login user supaya tidak butuh password
-const HOTSPOT_TAG          = 'FLAYNET-ISOLIR-HS-TAG';
+const HOTSPOT_TAG          = 'SKYNET-ISOLIR-HS-TAG';
 // Bridge interface untuk hotspot — bisa di-override via app_settings.
 // Default "all" = bind ke semua interface kecuali yang di-explicitly excluded.
 const DEFAULT_BRIDGE = 'bridge';
@@ -58,14 +58,14 @@ async function getHotspotSettings() {
     return {
       enabled:   map.isolir_hotspot_enabled === '1',
       interface: map.isolir_hotspot_interface || DEFAULT_BRIDGE,
-      dnsName:   map.isolir_hotspot_dns_name || 'isolir.flaynet.local',
+      dnsName:   map.isolir_hotspot_dns_name || 'isolir.skynet.local',
       pageUrl:   map.isolir_page_url || '',
     };
   } catch (e) {
     return {
       enabled: false,
       interface: DEFAULT_BRIDGE,
-      dnsName: 'isolir.flaynet.local',
+      dnsName: 'isolir.skynet.local',
       pageUrl: '',
     };
   }
@@ -93,8 +93,8 @@ async function runWithRetry(api, params, maxRetry = 2) {
 // 1. SETUP HOTSPOT untuk isolir
 // ════════════════════════════════════════════════════════════════════════
 /**
- * Setup hotspot server FLAYNET-ISOLIR-HS lengkap dengan profile, walled-garden,
- * dan auto-bind ke address-list FLAYNET-ISOLIR via interface "<all-ppp>" + bridge.
+ * Setup hotspot server SKYNET-ISOLIR-HS lengkap dengan profile, walled-garden,
+ * dan auto-bind ke address-list SKYNET-ISOLIR via interface "<all-ppp>" + bridge.
  *
  * @param {Object} api - MikroTik API client
  * @param {Object} device - row dari mikrotik_devices (untuk per-device settings)
@@ -278,7 +278,7 @@ async function setupIsolirHotspot(api, device) {
     warnings.push(`Walled-garden: ${e.message}`);
   }
 
-  // ── 6. Walled garden IP: sync dari bypass list FLAYNET-BYPASS ──
+  // ── 6. Walled garden IP: sync dari bypass list SKYNET-BYPASS ──
   // Hotspot punya rule walled-garden-ip terpisah yang accept by address-list.
   // Kalau IP target di address-list BYPASS → diizinkan lewat tanpa login.
   try {
@@ -295,14 +295,14 @@ async function setupIsolirHotspot(api, device) {
       }
     }
 
-    // Allow semua traffic ke address-list FLAYNET-BYPASS (gateway, DNS, LAN)
+    // Allow semua traffic ke address-list SKYNET-BYPASS (gateway, DNS, LAN)
     await runWithRetry(api, [
       '/ip/hotspot/walled-garden/ip/add',
-      '=dst-address-list=' + 'FLAYNET-BYPASS',
+      '=dst-address-list=' + 'SKYNET-BYPASS',
       '=action=accept',
       '=comment=' + HOTSPOT_TAG + ':bypass-list'
     ]);
-    results.push(`✓ Walled-garden-IP: traffic ke FLAYNET-BYPASS diizinkan (removed ${removed} lama)`);
+    results.push(`✓ Walled-garden-IP: traffic ke SKYNET-BYPASS diizinkan (removed ${removed} lama)`);
   } catch (e) {
     warnings.push(`Walled-garden-IP: ${e.message}`);
   }

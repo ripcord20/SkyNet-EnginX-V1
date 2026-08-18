@@ -182,7 +182,7 @@ class ToolsController {
               type: 'bypassed',
               macAddress: macUp || undefined,
               address: address || undefined,
-              comment: 'FLAYNET-HS-BIND-' + customer_id,
+              comment: 'SKYNET-HS-BIND-' + customer_id,
             });
             bindingMsg = ' + IP binding dibuat di router';
           } else {
