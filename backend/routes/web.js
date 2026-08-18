@@ -16,6 +16,7 @@ const {
   blockSalesArea,
 } = require('../middleware/salesAccess');
 const { allowHrisAdmin } = require('../middleware/hrisAccess');
+const { allowRadiusPage } = require('../middleware/radiusAccess');
 
 // Login page — auto-redirect kalau user sudah punya session valid.
 // Cek cookie 'token' (HttpOnly yang di-set saat login berhasil). Kalau JWT
@@ -190,7 +191,7 @@ router.get('/monitoring/ippool', authenticate, blockFinanceArea, (req, res) => {
   res.render('pages/ippool', { title: 'IP Pool Usage', user: req.user, active: 'ippool' });
 });
 
-router.get('/monitoring/radius', authenticate, blockFinanceArea, (req, res) => {
+router.get('/monitoring/radius', authenticate, allowRadiusPage, (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.render('pages/radius', { title: 'RADIUS AAA', user: req.user, active: 'radius' });
 });

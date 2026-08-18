@@ -1,7 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const { logActivity } = require('../middleware/activityLogger');
+const { allowRadiusApi } = require('../middleware/radiusAccess');
 const ctrl = require('../controllers/RadiusController');
+
+router.use(allowRadiusApi);
 
 router.get('/stats',              ctrl.stats);
 router.get('/settings',           ctrl.getSettings);
