@@ -7,6 +7,12 @@ const axios = require('axios');
 const logger = require('../utils/logger');
 const { MikrotikApiClient } = require('./MikrotikApiClient');
 const { parseResource, unwrapRestData, unwrapSingleton, mapInterfaceRow } = require('../utils/mikrotikResource');
+const {
+  buildWgInterfaceBody,
+  buildWgPeerBody,
+  mikrotikCreatePlan,
+  asMikrotikList,
+} = require('../utils/mikrotikWireguard');
 
 /**
  * Port → protokol detection (FALLBACK MODE — dipakai kalau caller tidak
@@ -737,29 +743,44 @@ class MikrotikService {
       disabled: flag(p.disabled),
     };
   }
+  /**
+   * Tambah item di collection RouterOS.
+   * PUT = REST add / binary /add. POST collection tanpa /add BUKAN add
+   * (binary mengirim command path mentah → gagal). Fallback POST .../add
+   * untuk REST yang hanya menerima command-style.
+   */
+  async _createItem(collectionPath, body) {
+    const plan = mikrotikCreatePlan(collectionPath);
+    try {
+      return await this.put(plan.primary.path, body);
+    } catch (e) {
+      try {
+        return await this.post(plan.fallback.path, body);
+      } catch (e2) {
+        throw new Error(e.message || e2.message);
+      }
+    }
+  }
+
   async getWireGuardInterfaces() {
     const rows = await this.get('/interface/wireguard');
-    return (Array.isArray(rows) ? rows : []).map(r => this._mapWgIface(r));
+    return asMikrotikList(rows).map(r => this._mapWgIface(r));
   }
   async getWireGuardPeers() {
     const rows = await this.get('/interface/wireguard/peers');
-    return (Array.isArray(rows) ? rows : []).map(r => this._mapWgPeer(r));
+    return asMikrotikList(rows).map(r => this._mapWgPeer(r));
   }
   async createWireGuardInterface(data = {}) {
-    const body = {};
-    if (data.name) body.name = String(data.name).trim();
-    if (data.listenPort || data['listen-port']) body['listen-port'] = String(data.listenPort || data['listen-port']);
-    if (data.mtu) body.mtu = String(data.mtu);
-    if (data.privateKey || data['private-key']) body['private-key'] = data.privateKey || data['private-key'];
-    if (data.comment) body.comment = data.comment;
-    return this.post('/interface/wireguard', body);
+    const body = buildWgInterfaceBody(data);
+    if (!body.name) throw new Error('Nama interface wajib diisi');
+    return this._createItem('/interface/wireguard', body);
   }
   async updateWireGuardInterface(id, data = {}) {
     const enc = encodeURIComponent(id);
     const body = {};
     if (data.name != null) body.name = String(data.name).trim();
     if (data.listenPort != null || data['listen-port'] != null) body['listen-port'] = String(data.listenPort || data['listen-port'] || '');
-    if (data.mtu != null) body.mtu = String(data.mtu);
+    if (data.mtu != null && String(data.mtu).trim()) body.mtu = String(data.mtu).trim();
     if (data.comment != null) body.comment = data.comment;
     if (data.disabled != null) body.disabled = data.disabled ? 'true' : 'false';
     try { return await this.patch(`/interface/wireguard/${enc}`, body); }
@@ -769,17 +790,10 @@ class MikrotikService {
     return this.delete(`/interface/wireguard/${encodeURIComponent(id)}`);
   }
   async createWireGuardPeer(data = {}) {
-    const body = {};
-    if (data.interface) body.interface = data.interface;
-    if (data.publicKey || data['public-key']) body['public-key'] = data.publicKey || data['public-key'];
-    if (data.privateKey || data['private-key']) body['private-key'] = data.privateKey || data['private-key'];
-    if (data.allowedAddress || data['allowed-address']) body['allowed-address'] = data.allowedAddress || data['allowed-address'];
-    if (data.endpointAddress || data['endpoint-address']) body['endpoint-address'] = data.endpointAddress || data['endpoint-address'];
-    if (data.endpointPort || data['endpoint-port']) body['endpoint-port'] = String(data.endpointPort || data['endpoint-port']);
-    if (data.keepalive || data['persistent-keepalive']) body['persistent-keepalive'] = data.keepalive || data['persistent-keepalive'];
-    if (data.comment) body.comment = data.comment;
-    if (data.presharedKey || data['preshared-key']) body['preshared-key'] = data.presharedKey || data['preshared-key'];
-    return this.post('/interface/wireguard/peers', body);
+    const body = buildWgPeerBody(data);
+    if (!body.interface) throw new Error('Interface wajib dipilih');
+    if (!body['public-key']) throw new Error('Public key peer wajib diisi');
+    return this._createItem('/interface/wireguard/peers', body);
   }
   async updateWireGuardPeer(id, data = {}) {
     const enc = encodeURIComponent(id);

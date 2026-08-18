@@ -74,7 +74,7 @@
       <div class="wg-hdr">
         <div>
           <h1>WireGuard</h1>
-          <p>Interface &amp; peer VPN WireGuard di MikroTik</p>
+          <p>Interface &amp; peer VPN WireGuard di MikroTik. Butuh REST/API (bukan SNMP saja). Package <code>wireguard</code> harus aktif di router.</p>
         </div>
         <div class="wg-hdr-r">
           <div id="mtSelectorMount"></div>
@@ -220,12 +220,13 @@ function hsLive(hs) { return hs && !/[dw]/i.test(hs) && !/\d+h/i.test(hs); }
 let _IFACES = [];
 
 async function loadAll() {
-  const r = await App.api(_url('/mikrotik/wireguard'));
-  if (!r?.success) {
-    document.getElementById('ifTbody').innerHTML = '<tr><td colspan="5" class="empty">' + esc(r?.message || 'Gagal memuat') + '</td></tr>';
-    document.getElementById('peerTbody').innerHTML = '<tr><td colspan="6" class="empty">' + esc(r?.warning || r?.message || 'Gagal') + '</td></tr>';
-    return;
-  }
+  try {
+    const r = await App.api(_url('/mikrotik/wireguard'));
+    if (!r?.success) {
+      document.getElementById('ifTbody').innerHTML = '<tr><td colspan="5" class="empty">' + esc(r?.message || 'Gagal memuat') + '</td></tr>';
+      document.getElementById('peerTbody').innerHTML = '<tr><td colspan="6" class="empty">' + esc(r?.warning || r?.message || 'Gagal') + '</td></tr>';
+      return;
+    }
   const d = r.data || {};
   const st = d.stats || {};
   document.getElementById('stIf').textContent = st.interfaces ?? 0;
@@ -235,6 +236,9 @@ async function loadAll() {
   _IFACES = d.interfaces || [];
   renderIfaces(_IFACES);
   renderPeers(d.peers || []);
+  } catch (e) {
+    document.getElementById('ifTbody').innerHTML = '<tr><td colspan="5" class="empty">' + esc(e.message || 'Gagal memuat') + '</td></tr>';
+  }
 }
 
 function renderIfaces(list) {
@@ -300,17 +304,27 @@ function editIface(i) {
   document.getElementById('ifModal').classList.add('show');
 }
 async function saveIface() {
+  const name = document.getElementById('ifName').value.trim();
+  if (!name) { App.showToast('Nama interface wajib diisi', 'error'); return; }
   const id = document.getElementById('ifId').value;
   const body = {
-    name: document.getElementById('ifName').value.trim(),
+    name,
     listenPort: document.getElementById('ifPort').value.trim(),
     mtu: document.getElementById('ifMtu').value.trim(),
     comment: document.getElementById('ifComment').value.trim()
   };
-  const url = id ? '/mikrotik/wireguard/interfaces/' + encodeURIComponent(id) : '/mikrotik/wireguard/interfaces';
-  const r = await App.api(_url(url), { method: id ? 'PUT' : 'POST', body: JSON.stringify(body) });
-  if (r?.success) { closeModal('ifModal'); App.showToast(r.message, 'success'); await loadAll(); }
-  else App.showToast(r?.message || 'Gagal', 'error');
+  const btn = document.querySelector('#ifModal .btn-pp-save');
+  if (btn) { btn.disabled = true; btn.textContent = 'Menyimpan…'; }
+  try {
+    const url = id ? '/mikrotik/wireguard/interfaces/' + encodeURIComponent(id) : '/mikrotik/wireguard/interfaces';
+    const r = await App.api(_url(url), { method: id ? 'PUT' : 'POST', body: JSON.stringify(body) });
+    if (r?.success) { closeModal('ifModal'); App.showToast(r.message, 'success'); await loadAll(); }
+    else App.showToast(r?.message || 'Gagal menambah interface WireGuard', 'error');
+  } catch (e) {
+    App.showToast(e.message || 'Gagal', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Simpan'; }
+  }
 }
 async function delIface(id, name) {
   if (!confirm('Hapus interface ' + name + '?')) return;
@@ -374,10 +388,15 @@ async function delPeer(id) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  if (window.App && typeof App.init === 'function') App.init();
   if (window.MikrotikSelector) {
-    window.MikrotikSelector.init({ onChange: () => loadAll() });
+    window.MikrotikSelector.init({
+      onReady: () => loadAll(),
+      onChange: () => loadAll()
+    });
+  } else {
+    loadAll();
   }
-  loadAll();
 });
 </script>
 </body>

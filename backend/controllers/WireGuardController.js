@@ -1,4 +1,5 @@
 const { getMikrotikInstanceByDevice } = require('../services/MikrotikService');
+const { friendlyWireGuardError } = require('../utils/mikrotikWireguard');
 const crypto = require('crypto');
 const logger = require('../utils/logger');
 
@@ -55,7 +56,7 @@ class WireGuardController {
       if (/ECONNRESET|timeout|ECONNREFUSED/i.test(err.message)) {
         return res.json({ success: true, data: { interfaces: [], peers: [], stats: { interfaces: 0, peers: 0, online: 0, disabled: 0 } }, warning: err.message });
       }
-      res.status(500).json({ success: false, message: err.message });
+      res.status(500).json({ success: false, message: friendlyWireGuardError(err.message) });
     }
   }
 
@@ -75,7 +76,7 @@ class WireGuardController {
       res.json({ success: true, message: 'Interface WireGuard dibuat' });
     } catch (err) {
       logger.error('WG createInterface: ' + err.message);
-      res.status(400).json({ success: false, message: err.message });
+      res.status(400).json({ success: false, message: friendlyWireGuardError(err.message) });
     }
   }
 
@@ -121,7 +122,7 @@ class WireGuardController {
       res.json({ success: true, message: 'Peer WireGuard dibuat' });
     } catch (err) {
       logger.error('WG createPeer: ' + err.message);
-      res.status(400).json({ success: false, message: err.message });
+      res.status(400).json({ success: false, message: friendlyWireGuardError(err.message) });
     }
   }
 
