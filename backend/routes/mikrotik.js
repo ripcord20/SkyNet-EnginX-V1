@@ -10,6 +10,7 @@ const FirewallController       = require('../controllers/FirewallController');
 const { controller: IfaceCtrl }= require('../controllers/InterfaceTrafficController');
 const MikrotikConfigController = require('../controllers/MikrotikConfigController');
 const HotspotController = require('../controllers/HotspotController');
+const WireGuardController = require('../controllers/WireGuardController');
 
 // ── CONFIG ──────────────────────────────────────────────────
 router.get('/config',  authenticate, MikrotikConfigController.getConfig);
@@ -43,6 +44,16 @@ router.put('/pppoe/secrets/:id',           authenticate, authorize('superadmin',
 router.delete('/pppoe/secrets/:id',        authenticate, authorize('superadmin','admin'), logActivity('delete','pppoe_secret'), PPPoEController.deleteSecret.bind(PPPoEController));
 router.post('/pppoe/secrets/:id/enable',   authenticate, authorize('superadmin','admin'), PPPoEController.enableSecret.bind(PPPoEController));
 router.post('/pppoe/secrets/:id/disable',  authenticate, authorize('superadmin','admin'), PPPoEController.disableSecret.bind(PPPoEController));
+
+// ── WIREGUARD ────────────────────────────────────────────────
+router.get('/wireguard',                     authenticate, WireGuardController.overview.bind(WireGuardController));
+router.post('/wireguard/keys',               authenticate, authorize('superadmin','admin'), WireGuardController.generateKeys.bind(WireGuardController));
+router.post('/wireguard/interfaces',         authenticate, authorize('superadmin','admin'), logActivity('create','wireguard'), WireGuardController.createInterface.bind(WireGuardController));
+router.put('/wireguard/interfaces/:id',      authenticate, authorize('superadmin','admin'), logActivity('update','wireguard'), WireGuardController.updateInterface.bind(WireGuardController));
+router.delete('/wireguard/interfaces/:id',   authenticate, authorize('superadmin','admin'), logActivity('delete','wireguard'), WireGuardController.deleteInterface.bind(WireGuardController));
+router.post('/wireguard/peers',              authenticate, authorize('superadmin','admin'), logActivity('create','wireguard_peer'), WireGuardController.createPeer.bind(WireGuardController));
+router.put('/wireguard/peers/:id',           authenticate, authorize('superadmin','admin'), logActivity('update','wireguard_peer'), WireGuardController.updatePeer.bind(WireGuardController));
+router.delete('/wireguard/peers/:id',        authenticate, authorize('superadmin','admin'), logActivity('delete','wireguard_peer'), WireGuardController.deletePeer.bind(WireGuardController));
 
 // ── IP POOL ──────────────────────────────────────────────────
 router.get('/ippool',      authenticate, IPPoolController.index.bind(IPPoolController));

@@ -183,6 +183,15 @@ router.get('/monitoring/pppoe', authenticate, blockFinanceArea, (req, res) => {
   res.render('pages/pppoe', { title: 'PPPoE Sessions', user: req.user, active: 'pppoe' });
 });
 
+router.get('/monitoring/wireguard', authenticate, blockFinanceArea, (req, res) => {
+  res.render('pages/wireguard', { title: 'WireGuard', user: req.user, active: 'wireguard' });
+});
+
+router.get('/monitoring/nas', authenticate, allowRadiusPage, (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.render('pages/nas', { title: 'NAS RADIUS', user: req.user, active: 'nas' });
+});
+
 router.get('/monitoring/queue', authenticate, blockFinanceArea, (req, res) => {
   res.render('pages/queue', { title: 'Simple Queue', user: req.user, active: 'queue' });
 });
