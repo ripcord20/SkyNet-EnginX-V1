@@ -261,7 +261,7 @@ function _fillSample(body) {
     paket: 'Paket 20 Mbps Home', periode: 'Juni 2026', jumlah: 'Rp 150.000',
     jatuh_tempo: '19 Juni 2026', tgl_jatuh_tempo: '19 Juni 2026', status: 'Belum Dibayar',
     cid: 'CID0042', link_bayar_permanen: 'http://localhost:3000/pub/cust/contohtokenpermanen',
-    perusahaan: (window.__COMPANY || 'FLAYNET Internet Service')
+    perusahaan: (window.__COMPANY || 'SKYNET Internet Service')
   };
   return String(body || '').replace(/\{(\w+)\}/g, (m, k) => (map[k] != null ? map[k] : m));
 }

@@ -489,7 +489,7 @@ async function _cmdCekCustData(chatId, query) {
   if (!q) {
     await _reply(chatId,
       'Format: <code>/cekcustdata &lt;nama|CID|IP|PPPoE&gt;</code>\n' +
-      'Contoh: <code>/cekcustdata FLAYNET.COM</code>, <code>/cekcustdata CID010</code>, ' +
+      'Contoh: <code>/cekcustdata SKYNET.COM</code>, <code>/cekcustdata CID010</code>, ' +
       '<code>/cekcustdata 10.10.10.5</code>');
     return;
   }
@@ -746,7 +746,7 @@ async function _cmdCekBayar(chatId, query) {
   if (!q) {
     await _reply(chatId,
       'Format: <code>/cekbayar &lt;nama|CID|IP|PPPoE&gt;</code>\n' +
-      'Contoh: <code>/cekbayar FLAYNET.COM</code> atau <code>/cekbayar CID010</code>');
+      'Contoh: <code>/cekbayar SKYNET.COM</code> atau <code>/cekbayar CID010</code>');
     return;
   }
 
@@ -1208,7 +1208,7 @@ async function _cmdCekOnt(chatId, query) {
   if (!q) {
     await _reply(chatId,
       'Format: <code>/cekont &lt;nama|CID|IP|PPPoE&gt;</code>\n' +
-      'Contoh: <code>/cekont FLAYNET.COM</code> atau <code>/cekont CID010</code>');
+      'Contoh: <code>/cekont SKYNET.COM</code> atau <code>/cekont CID010</code>');
     return;
   }
   const { Customer } = require('../models');
@@ -1652,7 +1652,7 @@ async function _dispatch(cmd, arg, chatId, allowControl) {
 
 const BOT_MENU = {
   root: {
-    title: '<b>Menu FLAYNET Bot</b>\nPilih kategori:',
+    title: '<b>Menu SKYNET Bot</b>\nPilih kategori:',
     rows: [
       [{ text: 'Jaringan', data: 'm:net' }, { text: 'Pelanggan', data: 'm:cust' }],
       [{ text: 'Infrastruktur', data: 'm:infra' }, { text: 'Keuangan', data: 'm:fin' }],
@@ -1730,7 +1730,7 @@ const BOT_MENU = {
 // Konfigurasi prompt untuk command yang butuh argumen (tipe "a:").
 // question = pertanyaan yang dikirim; placeholder = hint di kolom input.
 const CMD_PROMPT = {
-  cek:         { q: 'Masukkan nama / CID / IP / username PPPoE pelanggan:', ph: 'mis. FLAYNET.COM atau CID010' },
+  cek:         { q: 'Masukkan nama / CID / IP / username PPPoE pelanggan:', ph: 'mis. SKYNET.COM atau CID010' },
   cekcustdata: { q: 'Masukkan nama / CID / IP / PPPoE pelanggan:', ph: 'mis. CID010 atau 10.10.10.5' },
   tagihan:     { q: 'Masukkan nama / CID / IP / PPPoE pelanggan:', ph: 'mis. CID010' },
   cekbayar:    { q: 'Masukkan nama / CID / IP / PPPoE pelanggan:', ph: 'mis. CID010' },
@@ -2482,7 +2482,7 @@ async function _handleCallback(cb, cfg, allowed, allowControl) {
       if (payload === 'router') return await _cekIpRouterStart(chatId);
       if (payload === 'cust') {
         _setPending(chatId, 'cekip_pelanggan');
-        await Telegram.sendForceReply('Masukkan nama / CID / IP / PPPoE pelanggan:', String(chatId), 'mis. FLAYNET.COM atau CID010', cfg);
+        await Telegram.sendForceReply('Masukkan nama / CID / IP / PPPoE pelanggan:', String(chatId), 'mis. SKYNET.COM atau CID010', cfg);
         return;
       }
       return;
@@ -3014,7 +3014,7 @@ async function _cmdCekIp(chatId, query) {
   }
   if (first === 'pelanggan' || first === 'customer') {
     _setPending(chatId, 'cekip_pelanggan');
-    await Telegram.sendForceReply('Masukkan nama / CID / IP / PPPoE pelanggan:', String(chatId), 'mis. FLAYNET.COM atau CID010', await Telegram._getConfig());
+    await Telegram.sendForceReply('Masukkan nama / CID / IP / PPPoE pelanggan:', String(chatId), 'mis. SKYNET.COM atau CID010', await Telegram._getConfig());
     return;
   }
   // Tanpa arg → tampilkan pilihan.

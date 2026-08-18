@@ -2005,7 +2005,7 @@ async function loadVoucherTemplate() {
       primary_color:  s.vtpl_primary_color  || '#1565C0',
       primary_dark:   s.vtpl_primary_dark   || '#0D47A1',
       accent_color:   s.vtpl_accent_color   || '#2E7D32',
-      company_name:   s.vtpl_company_name   || 'FLAYNET',
+      company_name:   s.vtpl_company_name   || 'SKYNET',
       tagline:        s.vtpl_tagline        || 'Voucher Hotspot',
       logo_url:       s.vtpl_logo_url       || '',
       label_username: s.vtpl_label_username || 'USERNAME',
@@ -2427,7 +2427,7 @@ function _buildPrintHeader(title, subtitle, meta) {
         <svg viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0114.08 0"/><path d="M1.42 9a16 16 0 0121.16 0"/><path d="M8.53 16.11a6 6 0 016.95 0"/><circle cx="12" cy="20" r="1" fill="#fff" stroke="none"/></svg>
       </div>
       <div>
-        <div class="ph-name">FLAYNET</div>
+        <div class="ph-name">SKYNET</div>
         <div class="ph-sub">${subtitle}</div>
       </div>
     </div>
@@ -3367,7 +3367,7 @@ function printVoucherCards(vouchers, title, price, duration) {
   // Cache di window agar tidak fetch ulang setiap print
   const T = window._voucherTpl || {
     primary_color:'#1565C0', primary_dark:'#0D47A1', accent_color:'#2E7D32',
-    company_name:'FLAYNET', tagline:'Voucher Hotspot', logo_url:'',
+    company_name:'SKYNET', tagline:'Voucher Hotspot', logo_url:'',
     label_username:'USERNAME', label_password:'PASSWORD', label_profile:'PAKET',
     label_duration:'DURASI', label_price:'HARGA',
     show_wifi:'1', show_price:'1', show_duration:'1', show_profile:'1', show_footer:'1',
@@ -3623,7 +3623,7 @@ function printVouchers() {
   // Load template voucher dari AppSetting (cache di window._voucherTpl)
   const T = window._voucherTpl || {
     primary_color:'#1565C0', primary_dark:'#0D47A1', accent_color:'#2E7D32',
-    company_name:'FLAYNET', tagline:'Voucher Hotspot', logo_url:'',
+    company_name:'SKYNET', tagline:'Voucher Hotspot', logo_url:'',
     show_wifi:'1', show_profile:'1', show_footer:'1', footer_text:''
   };
 

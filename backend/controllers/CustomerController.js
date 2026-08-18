@@ -823,7 +823,7 @@ class CustomerController {
             await customer.update({ pppoe_username: null });
             return res.json({
               success: true,
-              message: 'PPPoE username dikosongkan di FLAYNET. Tidak ada secret lama di router untuk dihapus.',
+              message: 'PPPoE username dikosongkan di SKYNET. Tidak ada secret lama di router untuk dihapus.',
               old_username: oldUsername,
               new_username: null,
               updated_db: true,
@@ -873,7 +873,7 @@ class CustomerController {
             await customer.update({ pppoe_username: null });
             return res.json({
               success: true,
-              message: `Secret "${oldUsername}" tidak ada di router (mungkin sudah dihapus). PPPoE username dikosongkan di FLAYNET.`,
+              message: `Secret "${oldUsername}" tidak ada di router (mungkin sudah dihapus). PPPoE username dikosongkan di SKYNET.`,
               old_username: oldUsername,
               new_username: null,
               updated_db: true,
@@ -926,12 +926,12 @@ class CustomerController {
       let okMessage;
       if (isClearing) {
         okMessage = sync_to_router
-          ? `PPPoE username dihapus di FLAYNET & secret dihapus di router (sebelumnya: ${oldUsername})`
-          : `PPPoE username dikosongkan di FLAYNET saja (sebelumnya: ${oldUsername}). Router tidak disentuh.`;
+          ? `PPPoE username dihapus di SKYNET & secret dihapus di router (sebelumnya: ${oldUsername})`
+          : `PPPoE username dikosongkan di SKYNET saja (sebelumnya: ${oldUsername}). Router tidak disentuh.`;
       } else {
         okMessage = sync_to_router
-          ? `PPPoE username berhasil diubah di FLAYNET & router (${oldUsername} → ${trimmedNew})`
-          : `PPPoE username diubah di FLAYNET saja (${oldUsername} → ${trimmedNew}). Router tidak disentuh.`;
+          ? `PPPoE username berhasil diubah di SKYNET & router (${oldUsername} → ${trimmedNew})`
+          : `PPPoE username diubah di SKYNET saja (${oldUsername} → ${trimmedNew}). Router tidak disentuh.`;
       }
 
       return res.json({

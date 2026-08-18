@@ -1,5 +1,5 @@
 // ============================================================
-// FLAYNET — Shared MikroTik Selector
+// SKYNET — Shared MikroTik Selector
 // ============================================================
 // Dropdown selector MikroTik yang konsisten antar halaman
 // (Dashboard, PPPoE, Queue, IP Pool, Firewall, Traffic, Resource).

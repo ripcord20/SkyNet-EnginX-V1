@@ -1,4 +1,4 @@
-// FLAYNET.Com billing.js — Billing & Invoice Management
+// SKYNET.COM billing.js — Billing & Invoice Management
 
 let _billPage = 1;
 const MONTHS = ['','Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];

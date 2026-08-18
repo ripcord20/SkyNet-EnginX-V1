@@ -62,14 +62,14 @@ router.get('/login', async (req, res) => {
     }
   } catch (_) { /* defensive */ }
   // Ambil data perusahaan untuk branding & copyright footer.
-  let company = { name: 'FLAYNET', address: '', phone: '', whatsapp: '', bg: '' };
+  let company = { name: 'SKYNET', address: '', phone: '', whatsapp: '', bg: '' };
   try {
     const keys = ['company_name', 'app_name', 'company_address', 'company_phone', 'company_whatsapp', 'register_bg_url'];
     const rows = await AppSetting.findAll({ where: { key: { [Op.in]: keys } } });
     const map = {};
     rows.forEach(r => { map[r.key] = r.value; });
     company = {
-      name: (map.company_name || map.app_name || 'FLAYNET').trim() || 'FLAYNET',
+      name: (map.company_name || map.app_name || 'SKYNET').trim() || 'SKYNET',
       address: (map.company_address || '').trim(),
       phone: (map.company_phone || '').trim(),
       // nomor CS untuk WhatsApp (fallback ke telepon perusahaan bila kosong)

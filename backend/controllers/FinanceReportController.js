@@ -67,7 +67,7 @@ class FinanceReportController {
     try {
       const ExcelJS = require('exceljs');
       const d = await buildReportData(req);
-      const company = (await getCompanyName().catch(() => null)) || 'FLAYNET';
+      const company = (await getCompanyName().catch(() => null)) || 'SKYNET';
 
       const wb = new ExcelJS.Workbook();
       wb.creator = company;
@@ -136,7 +136,7 @@ class FinanceReportController {
     try {
       const PDFDocument = require('pdfkit');
       const d = await buildReportData(req);
-      const company = (await getCompanyName().catch(() => null)) || 'FLAYNET';
+      const company = (await getCompanyName().catch(() => null)) || 'SKYNET';
 
       const doc = new PDFDocument({ size: 'A4', margin: 48 });
       const fname = `Laporan-Keuangan-${d.periodLabel.replace(/\s+/g, '-')}.pdf`;

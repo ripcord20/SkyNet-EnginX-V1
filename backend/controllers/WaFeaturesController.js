@@ -155,7 +155,7 @@ const templates = {
       const fmtID = (m) => m.date() + ' ' + MONTHS[m.month()+1] + ' ' + m.year();
       const dummy = {
         // ── Identitas pelanggan ───────────────────────────────────────
-        nama:           'FLAYNET.COM',
+        nama:           'SKYNET.COM',
         cid:            'CID0042',
         phone:          '628123456789',
         nohp:           '628123456789',
@@ -568,7 +568,7 @@ const reminder = {
         const now = moment();
         const dueIn3 = moment().add(3, 'days');
         vars = {
-          '{nama}':             'FLAYNET.COM (TEST)',
+          '{nama}':             'SKYNET.COM (TEST)',
           '{nohp}':             cleanPhone,
           '{phone}':            cleanPhone,
           '{invoice}':          'INV-' + now.format('DDMM') + '-TEST',

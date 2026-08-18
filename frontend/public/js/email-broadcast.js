@@ -1,4 +1,4 @@
-// FLAYNET.Com email-broadcast.js — Broadcast Email Manager
+// SKYNET.COM email-broadcast.js — Broadcast Email Manager
 // Mengikuti pola broadcast.js (WA) dengan tambahan: kategori, subjek,
 // preview email HTML branded, kirim test, dan detail modal.
 

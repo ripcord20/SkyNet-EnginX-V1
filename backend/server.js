@@ -1065,8 +1065,8 @@ const startServer = async () => {
 
     // Start main HTTP server
     server.listen(PORT, () => {
-      logger.info(`FLAYNET.COM CRM running on http://localhost:${PORT}`);
-      console.log(`\n FLAYNET.COM CRM running on http://localhost:${PORT}\n`);
+      logger.info(`SKYNET.COM CRM running on http://localhost:${PORT}`);
+      console.log(`\n SKYNET.COM CRM running on http://localhost:${PORT}\n`);
     });
 
     // Graceful shutdown

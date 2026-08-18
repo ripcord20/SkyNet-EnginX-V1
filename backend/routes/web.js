@@ -301,7 +301,7 @@ function renderMobile(page, title, active) {
     if (!_mobileAllowed.includes(roleName)) return res.redirect('/dashboard');
     res.render('pages/mobile/' + page, {
       title, user: req.user, active, layout: false,
-      appName: (res.locals && res.locals.appName) || process.env.APP_NAME || 'FLAYNET'
+      appName: (res.locals && res.locals.appName) || process.env.APP_NAME || 'SKYNET.COM'
     });
   };
 }

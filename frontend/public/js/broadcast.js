@@ -1,4 +1,4 @@
-// FLAYNET.Com broadcast.js — Broadcast Manager
+// SKYNET.COM broadcast.js — Broadcast Manager
 
 // ── Helpers (harus di atas sebelum dipakai) ───────────────────
 function _setText(id, v) { const e = document.getElementById(id); if (e) e.textContent = v; }

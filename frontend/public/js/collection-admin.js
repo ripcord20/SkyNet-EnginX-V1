@@ -654,7 +654,7 @@
     '</tr>';
 
     var companyName = (document.querySelector('.brand-name') || {}).textContent
-      || (document.title || 'FLAYNET').split('-')[0].trim() || 'FLAYNET';
+      || (document.title || 'SKYNET').split('-')[0].trim() || 'SKYNET';
 
     var html = '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8">' +
       '<title>Laporan Komisi Kolektor - ' + esc(periodLabel) + '</title>' +
@@ -695,7 +695,7 @@
         '<th>Skema Komisi</th><th style="text-align:right;">Komisi</th><th style="text-align:right;">Cash Pegang</th>' +
       '</tr></thead><tbody>' + rowsHtml + totalRow + '</tbody></table>' +
       '<div class="sign"><div class="box">Disetujui oleh,<div class="line">( ____________________ )</div></div></div>' +
-      '<div class="foot">Dokumen dibuat otomatis oleh sistem FLAYNET-CRM</div>' +
+      '<div class="foot">Dokumen dibuat otomatis oleh sistem SKYNET-CRM</div>' +
       '<script>window.onload=function(){window.print();}<\/script>' +
       '</body></html>';
 

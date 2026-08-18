@@ -227,8 +227,8 @@ window.toggleIsolate = async function (id, action) {
 // Modal konfirmasi hapus customer dengan opsi sync ke router MikroTik.
 //
 // Dipanggil oleh deleteCustomer(). Return Promise<'sync' | 'db_only' | 'cancel'>:
-//   - 'sync'    : hapus customer di FLAYNET + hapus secret PPPoE di router
-//   - 'db_only' : hapus customer di FLAYNET saja (secret router tidak disentuh)
+//   - 'sync'    : hapus customer di SKYNET + hapus secret PPPoE di router
+//   - 'db_only' : hapus customer di SKYNET saja (secret router tidak disentuh)
 //   - 'cancel'  : batalkan, tidak menghapus apa-apa
 //
 // Param `customer` adalah object minimal { id, name, pppoe_username, mikrotik_id, mikrotik_name }.
@@ -271,7 +271,7 @@ function _confirmCustomerDelete(customer) {
         ${canSync ? `
           <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:12px;color:#92400e;line-height:1.5;margin-bottom:6px;">
             <strong>Apa yang ingin Anda lakukan?</strong><br>
-            Tanpa hapus secret di router, customer mungkin masih bisa login PPPoE meski sudah dihapus di FLAYNET.
+            Tanpa hapus secret di router, customer mungkin masih bisa login PPPoE meski sudah dihapus di SKYNET.
           </div>` : `
           <div style="background:#f1f5f9;border:1px solid #cbd5e1;border-radius:8px;padding:10px 12px;font-size:12px;color:#475569;line-height:1.5;margin-bottom:6px;">
             ${syncDisabledReason}, jadi tidak ada secret di router yang perlu dihapus.
@@ -285,7 +285,7 @@ function _confirmCustomerDelete(customer) {
         </button>
         <button id="__custDelDbOnly" style="background:#fff;color:#0f172a;border:1px solid #e2e8f0;border-radius:8px;padding:11px 14px;font-size:13px;font-weight:600;cursor:pointer;text-align:left;line-height:1.4;">
           <div>Hapus dari database saja (tanpa sentuh router)</div>
-          <div style="font-size:11px;font-weight:400;color:#64748b;margin-top:2px;">${hasPppoe ? 'Pilih ini kalau Anda sudah hapus secret manual via Winbox.' : 'Hanya hapus record di database FLAYNET.'}</div>
+          <div style="font-size:11px;font-weight:400;color:#64748b;margin-top:2px;">${hasPppoe ? 'Pilih ini kalau Anda sudah hapus secret manual via Winbox.' : 'Hanya hapus record di database SKYNET.'}</div>
         </button>
         <button id="__custDelCancel" style="background:#fff;color:#64748b;border:1px solid #e2e8f0;border-radius:8px;padding:9px 14px;font-size:12.5px;font-weight:500;cursor:pointer;margin-top:2px;">
           Batal
@@ -800,7 +800,7 @@ function _confirmPppoeRename(oldName, newName) {
         </div>
         <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:12px;color:#92400e;line-height:1.5;margin-bottom:6px;">
           <strong>Apa yang ingin Anda lakukan?</strong><br>
-          Tanpa sync ke router, data di FLAYNET dan MikroTik akan tidak konsisten.
+          Tanpa sync ke router, data di SKYNET dan MikroTik akan tidak konsisten.
         </div>
       </div>
       <div style="padding:14px 22px;background:#fafbfc;border-top:1px solid #f1f5f9;display:flex;flex-direction:column;gap:8px;">
@@ -945,7 +945,7 @@ async function _saveCustomerInner() {
   // ═══ STEP 2a: Intercept PPPoE username rename di mode EDIT ═══
   // Kalau user mengubah pppoe_username dari value aslinya, butuh konfirmasi
   // apakah harus sync ke router MikroTik atau hanya update DB. Hal ini supaya
-  // tidak terjadi desync silent antara DB FLAYNET dan secret di router.
+  // tidak terjadi desync silent antara DB SKYNET dan secret di router.
   //
   // Skip modal kalau:
   //   - Mode tambah baru (bukan edit)

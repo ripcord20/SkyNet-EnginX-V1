@@ -66,7 +66,7 @@ class CollectionController {
       const COMM = { flat: 'Flat / invoice', percent: 'Persentase', none: 'Tanpa komisi' };
 
       const wb = new ExcelJS.Workbook();
-      wb.creator = 'FLAYNET';
+      wb.creator = 'SKYNET';
       const ws = wb.addWorksheet('Rekap Kolektor');
       ws.columns = [{ width: 26 }, { width: 12 }, { width: 18 }, { width: 22 }, { width: 16 }, { width: 16 }, { width: 16 }];
 
@@ -183,7 +183,7 @@ class CollectionController {
 
       doc.moveDown(1.2);
       doc.fillColor(muted).fontSize(8).font('Helvetica')
-        .text('Dicetak otomatis oleh FLAYNET — ' + new Date().toLocaleString('id-ID'), left, doc.y);
+        .text('Dicetak otomatis oleh SKYNET — ' + new Date().toLocaleString('id-ID'), left, doc.y);
 
       doc.end();
     } catch (e) {

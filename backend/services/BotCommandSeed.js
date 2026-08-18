@@ -27,7 +27,7 @@ const DEFAULTS = [
   },
   {
     keyword: 'cek', aliases: 'cari', type: 'builtin', handler: 'cek',
-    description: 'Cari pelanggan & tampilkan status. Tanpa argumen membuka menu tombol. Contoh: /cek FLAYNET.COM atau /cek CID010.',
+    description: 'Cari pelanggan & tampilkan status. Tanpa argumen membuka menu tombol. Contoh: /cek SKYNET.COM atau /cek CID010.',
     require_control: false, is_system: true, sort_order: 30,
     reply_template: '',
   },
@@ -39,7 +39,7 @@ const DEFAULTS = [
   },
   {
     keyword: 'cekcustdata', aliases: 'datacust,custdata', type: 'builtin', handler: 'cekcustdata',
-    description: 'Detail data pelanggan (nama, CID, aktivasi, alamat, paket, IP, PPPoE, titik Maps). Contoh: /cekcustdata FLAYNET.COM atau /cekcustdata CID010.',
+    description: 'Detail data pelanggan (nama, CID, aktivasi, alamat, paket, IP, PPPoE, titik Maps). Contoh: /cekcustdata SKYNET.COM atau /cekcustdata CID010.',
     require_control: false, is_system: true, sort_order: 36,
     reply_template: '',
   },
@@ -63,13 +63,13 @@ const DEFAULTS = [
   },
   {
     keyword: 'cekont', aliases: 'ont,rxpower', type: 'builtin', handler: 'cekont',
-    description: 'Cek status ONT + RX power dari GenieACS (by pelanggan). Contoh: /cekont FLAYNET.COM atau /cekont CID010.',
+    description: 'Cek status ONT + RX power dari GenieACS (by pelanggan). Contoh: /cekont SKYNET.COM atau /cekont CID010.',
     require_control: false, is_system: true, sort_order: 40,
     reply_template: '',
   },
   {
     keyword: 'cekbayar', aliases: 'bayar,riwayatbayar', type: 'builtin', handler: 'cekbayar',
-    description: 'Riwayat & status pembayaran pelanggan (tunggakan + 5 pembayaran terakhir). Contoh: /cekbayar FLAYNET.COM atau /cekbayar CID010.',
+    description: 'Riwayat & status pembayaran pelanggan (tunggakan + 5 pembayaran terakhir). Contoh: /cekbayar SKYNET.COM atau /cekbayar CID010.',
     require_control: false, is_system: true, sort_order: 41,
     reply_template: '',
   },

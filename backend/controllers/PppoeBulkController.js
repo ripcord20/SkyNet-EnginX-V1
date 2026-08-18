@@ -116,7 +116,7 @@ async function fetchRouterSnapshot(deviceId) {
 exports.downloadTemplate = async (req, res) => {
   try {
     const wb = new ExcelJS.Workbook();
-    wb.creator = 'FLAYNET-CRM';
+    wb.creator = 'SKYNET-CRM';
     const ws = wb.addWorksheet('User PPPoE');
 
     ws.columns = COLUMNS.map(c => ({
@@ -583,7 +583,7 @@ exports.createProfiles = async (req, res) => {
           rateLimit:     p.rateLimit || undefined,
           localAddress:  p.localAddress || undefined,
           remoteAddress: p.remoteAddress || undefined,
-          comment:       p.comment || 'Dibuat via FLAYNET bulk provisioning',
+          comment:       p.comment || 'Dibuat via SKYNET bulk provisioning',
         });
         existing.add(name);
         result.created.push({ name, rateLimit: p.rateLimit || null });
@@ -1013,7 +1013,7 @@ exports.report = async (req, res) => {
     });
 
     const wb = new ExcelJS.Workbook();
-    wb.creator = 'FLAYNET-CRM';
+    wb.creator = 'SKYNET-CRM';
 
     // Sheet ringkasan
     const sum = wb.addWorksheet('Ringkasan');

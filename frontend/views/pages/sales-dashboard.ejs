@@ -1208,7 +1208,7 @@
 <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <script>
 const ROLE = <%- JSON.stringify((user && user.role && (typeof user.role==='object'? user.role.name : user.role)) || '') %>;
-const APP_NAME = <%- JSON.stringify(typeof appName !== 'undefined' ? appName : 'FLAYNET') %>;
+const APP_NAME = <%- JSON.stringify(typeof appName !== 'undefined' ? appName : 'SKYNET') %>;
 const IS_ADMIN = ['admin','superadmin'].includes((ROLE||'').toLowerCase());
 const IS_SALES = (ROLE||'').toLowerCase() === 'sales';
 const IS_SUPERADMIN = (ROLE||'').toLowerCase() === 'superadmin';
@@ -1614,7 +1614,7 @@ async function loadReferralLinks(){
   </tr>`).join('');
 }
 function copyText(t){navigator.clipboard.writeText(t).then(()=>toast('Link disalin')).catch(()=>toast('Gagal menyalin',false));}
-function shareWAText(link){window.open('https://wa.me/?text='+encodeURIComponent('Daftar internet FLAYNET di sini: '+link),'_blank');}
+function shareWAText(link){window.open('https://wa.me/?text='+encodeURIComponent('Daftar internet SKYNET di sini: '+link),'_blank');}
 
 // ── Analytics (bar chart, heatmap, donut) ──
 async function loadAnalytics(){
@@ -3077,7 +3077,7 @@ async function generateReport(){
     <div class="card" id="printArea">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;border-bottom:2px solid #1a6ef5;padding-bottom:12px">
         <div>
-          <div style="font-size:20px;font-weight:800;color:#0f172a">${APP_NAME||'FLAYNET'}</div>
+          <div style="font-size:20px;font-weight:800;color:#0f172a">${APP_NAME||'SKYNET'}</div>
           <div style="font-size:13px;color:#475569;margin-top:2px">Laporan Komisi Sales</div>
         </div>
         <div style="text-align:right;font-size:12px;color:#475569">
@@ -3157,7 +3157,7 @@ async function printSlip(salesId, salesName){
     .sign .line{margin-top:54px;border-top:1px solid #94a3b8;padding-top:4px;min-width:170px}
     @media print{@page{margin:14mm}}
   </style></head><body onload="window.print()">
-    <div class="hd"><div><div class="co">${esc(APP_NAME||'FLAYNET')}</div><div class="ti">Slip Komisi Sales</div></div>
+    <div class="hd"><div><div class="co">${esc(APP_NAME||'SKYNET')}</div><div class="ti">Slip Komisi Sales</div></div>
       <div style="text-align:right;font-size:12px;color:#475569">Dicetak: ${new Date().toLocaleString('id-ID')}</div></div>
     <div class="meta">
       <div>Nama Sales : <b>${esc(salesName)}</b></div>

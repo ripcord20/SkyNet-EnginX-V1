@@ -42,7 +42,7 @@ async function reverseGeocode(lat, lng) {
     const ctrl = new AbortController();
     const to = setTimeout(() => ctrl.abort(), 6000); // timeout 6s
     const r = await fetch(url, {
-      headers: { 'User-Agent': 'FLAYNET-Sales/1.0', 'Accept': 'application/json' },
+      headers: { 'User-Agent': 'SKYNET-Sales/1.0', 'Accept': 'application/json' },
       signal: ctrl.signal
     });
     clearTimeout(to);

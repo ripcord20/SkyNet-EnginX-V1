@@ -258,7 +258,7 @@ const ResellerController = {
       ]);
 
       // Nama brand untuk tampilan reseller: company_name → app_name → fallback
-      let brandName = 'FLAYNET Reseller';
+      let brandName = 'SKYNET Reseller';
       try {
         const { AppSetting } = require('../models');
         const brandRows = await AppSetting.findAll({ where: { key: ['company_name', 'app_name'] } });

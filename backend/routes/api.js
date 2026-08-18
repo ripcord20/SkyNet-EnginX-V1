@@ -1550,7 +1550,7 @@ router.get('/app-settings/backup', authenticate, demoGuard, async (req, res) => 
 
     const payload = {
       _meta: {
-        app: 'FLAYNET-CRM',
+        app: 'SKYNET-CRM',
         type: 'settings-backup',
         version: 1,
         exported_at: new Date().toISOString(),

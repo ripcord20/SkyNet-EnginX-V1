@@ -1,4 +1,4 @@
-// FLAYNET.Com invoice-broadcast.js — Broadcast Invoice via Email
+// SKYNET.COM invoice-broadcast.js — Broadcast Invoice via Email
 // Mengelola: format email invoice (sinkron dgn Settings via key invoice_email_*),
 // preview live, daftar invoice, pilih & kirim massal via send-email-bulk.
 

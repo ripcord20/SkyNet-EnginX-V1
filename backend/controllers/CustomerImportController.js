@@ -626,7 +626,7 @@ exports.importPreview = async (req, res) => {
           }
         });
       } else {
-        routerCheckWarnings.push('Tidak ada router MikroTik aktif yang terdaftar di FLAYNET. Validasi PPPoE/IP ke router di-skip.');
+        routerCheckWarnings.push('Tidak ada router MikroTik aktif yang terdaftar di SKYNET. Validasi PPPoE/IP ke router di-skip.');
       }
     } catch (err) {
       // Fail-soft: kalau seluruh proses fetch gagal, lanjut tanpa validation

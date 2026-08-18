@@ -135,7 +135,7 @@ class CronService {
     } catch (e) { console.error('[Cron] keuangan income backfill:', e.message); }
 
     // Auto-verifikasi sesi Fonnte — provider Fonnte adalah layanan cloud;
-    // device-nya hidup di server Fonnte, bukan di sini. Saat FLAYNET restart,
+    // device-nya hidup di server Fonnte, bukan di sini. Saat SKYNET restart,
     // status di DB bisa jadi 'disconnected' meski device Fonnte sebenarnya aktif.
     // Job ini mengecek ulang status ke API Fonnte secara berkala + sekali saat
     // start, lalu update DB & broadcast ke UI — jadi tak perlu klik "Verifikasi

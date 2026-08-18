@@ -2,7 +2,7 @@
  * WahaService.js — Provider WA Gateway via WAHA (self-hosted, HTTP API)
  * ---------------------------------------------------------------------
  * WAHA = WhatsApp HTTP API (https://waha.devlike.pro) yang berjalan sebagai
- * container Docker TERPISAH dari FLAYNET-CRM. Session WA hidup di WAHA, bukan
+ * container Docker TERPISAH dari SKYNET-CRM. Session WA hidup di WAHA, bukan
  * di proses Node aplikasi ini — jadi restart/deploy CRM tidak memutus koneksi
  * WA (beda dengan Baileys embedded di WAService.js).
  *

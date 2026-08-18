@@ -46,7 +46,7 @@ const TEMPLATES = {
     note: 'Email invoice memakai tata letak khusus (lampiran PDF & info rekening). Subject, Heading, Intro, dan Label Tombol di sini diterapkan ke email invoice.',
     sample: {
       nama: 'Budi Santoso', invoice: 'INV-2026-0042', periode: 'Juni 2026',
-      jumlah: 'Rp 150.000', jatuh_tempo: '20 Juni 2026', paket: 'Home 50 Mbps', perusahaan: 'FLAYNET Network'
+      jumlah: 'Rp 150.000', jatuh_tempo: '20 Juni 2026', paket: 'Home 50 Mbps', perusahaan: 'SKYNET Network'
     }
   },
 
@@ -66,7 +66,7 @@ const TEMPLATES = {
     vars: ['nama', 'invoice', 'periode', 'jumlah', 'jatuh_tempo', 'paket', 'perusahaan'],
     sample: {
       nama: 'Budi Santoso', invoice: 'INV-2026-0042', periode: 'Juni 2026',
-      jumlah: 'Rp 150.000', jatuh_tempo: '20 Juni 2026', paket: 'Home 50 Mbps', perusahaan: 'FLAYNET Network'
+      jumlah: 'Rp 150.000', jatuh_tempo: '20 Juni 2026', paket: 'Home 50 Mbps', perusahaan: 'SKYNET Network'
     }
   },
 
@@ -90,7 +90,7 @@ const TEMPLATES = {
     note: 'Email kwitansi memakai tata letak ini + lampiran kwitansi PDF. Subject, Heading, Intro, Outro, dan Warna Aksen akan diterapkan.',
     sample: {
       nama: 'Budi Santoso', invoice: 'INV-2026-0042', periode: 'Juni 2026', jumlah: 'Rp 150.000',
-      metode: 'Transfer Bank', tanggal_bayar: '15 Juni 2026', jatuh_tempo: '20 Juli 2026', perusahaan: 'FLAYNET Network'
+      metode: 'Transfer Bank', tanggal_bayar: '15 Juni 2026', jatuh_tempo: '20 Juli 2026', perusahaan: 'SKYNET Network'
     }
   },
 
@@ -110,7 +110,7 @@ const TEMPLATES = {
     vars: ['nama', 'id_pelanggan', 'paket', 'telepon', 'email', 'perusahaan'],
     sample: {
       nama: 'Budi Santoso', id_pelanggan: 'CUST-00128', paket: 'Home 50 Mbps',
-      telepon: '0812-3456-7890', email: 'budi@email.com', perusahaan: 'FLAYNET Network'
+      telepon: '0812-3456-7890', email: 'budi@email.com', perusahaan: 'SKYNET Network'
     }
   },
 
@@ -130,7 +130,7 @@ const TEMPLATES = {
     vars: ['nama', 'order', 'paket', 'jumlah', 'username', 'password', 'perusahaan'],
     sample: {
       nama: 'Pembeli', order: 'VC-7H3K9P', paket: 'Voucher 3 Hari', jumlah: 'Rp 13.000',
-      username: 'wifi-7h3k9p', password: 'a1b2c3', perusahaan: 'FLAYNET Network'
+      username: 'wifi-7h3k9p', password: 'a1b2c3', perusahaan: 'SKYNET Network'
     }
   },
 
@@ -148,7 +148,7 @@ const TEMPLATES = {
       accent:  '#1f8bff'
     },
     vars: ['perusahaan', 'waktu'],
-    sample: { perusahaan: 'FLAYNET Network', waktu: new Date().toLocaleString('id-ID') }
+    sample: { perusahaan: 'SKYNET Network', waktu: new Date().toLocaleString('id-ID') }
   }
 };
 

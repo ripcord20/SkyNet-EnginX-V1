@@ -15,7 +15,7 @@ const PERIOD_LABELS = { this_month:'Bulan Ini', last_month:'Bulan Lalu', this_we
 const FREQ_LABELS   = { daily:'Harian', weekly:'Mingguan', monthly:'Bulanan' };
 
 // ── Modal konfirmasi kustom (ganti confirm() bawaan browser) ─────────
-// Mengembalikan Promise<boolean>. Gaya bersih, palet biru/teal FLAYNET.
+// Mengembalikan Promise<boolean>. Gaya bersih, palet biru/teal SKYNET.
 function waConfirm(opts) {
   opts = opts || {};
   const title   = opts.title   || 'Konfirmasi';
