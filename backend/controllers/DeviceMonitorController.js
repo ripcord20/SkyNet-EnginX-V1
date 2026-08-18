@@ -8,6 +8,8 @@ const { Device, DeviceLog, TrafficData, sequelize } = require('../models');
 const { Op }   = require('sequelize');
 const { getMikrotikInstance } = require('../services/MikrotikService');
 const { SNMP_OIDS } = require('../config/constants');
+const { parseCpuPercent } = require('../utils/mikrotikResource');
+const { readCpuLoad, readMemory, formatSnmpUptime, pickVarbind, snmpText } = require('../utils/snmpMetrics');
 
 let snmp;
 try { snmp = require('net-snmp'); } catch(e) {}
@@ -75,11 +77,12 @@ exports.realtimeMetrics = async (req, res) => {
     _saveLog(device.id, metrics);
 
     // Update device status
+    const cpu = parseCpuPercent(metrics.cpu);
     await device.update({
-      cpu_load:     metrics.cpu,
+      cpu_load:     cpu,
       memory_usage: metrics.memPercent,
       uptime:       metrics.uptime,
-      status:       metrics.reachable ? (metrics.cpu > 90 ? 'warning' : 'online') : 'offline',
+      status:       metrics.reachable ? (cpu > 90 ? 'warning' : 'online') : 'offline',
       last_polled:  new Date()
     });
 
@@ -284,15 +287,9 @@ async function _pollMikrotikApi(device) {
       })
       .filter(Boolean);
 
-    // Disk — ambil langsung dari /system/resource raw
-    let diskPct = 0;
-    let diskFree = 0, diskTotal = 0;
-    try {
-      const rawRes = await mt.get('/system/resource');
-      diskTotal = parseInt(rawRes['total-hdd-space']) || 0;
-      diskFree  = parseInt(rawRes['free-hdd-space'])  || 0;
-      if (diskTotal > 0) diskPct = Math.round(((diskTotal - diskFree) / diskTotal) * 100);
-    } catch(e) {}
+    const diskTotal = sysRes.totalHdd || 0;
+    const diskFree  = sysRes.freeHdd || 0;
+    const diskPct   = diskTotal > 0 ? Math.round(((diskTotal - diskFree) / diskTotal) * 100) : 0;
 
     return {
       reachable:    true,
@@ -326,87 +323,75 @@ async function _pollMikrotikApi(device) {
 // INTERNAL — Poll SNMP
 // ─────────────────────────────────────────────────────────────
 async function _pollSnmp(device) {
-  if (!snmp) return { reachable: false, protocol: 'snmp', error: 'net-snmp not installed',
-                      cpu: 0, memPercent: 0, diskPercent: 0, interfaces: [],
-                      totalRxMbps: 0, totalTxMbps: 0 };
-  return new Promise((resolve) => {
-    const sessionOpts = {
-      port:    device.snmp_port || 161,
-      retries: 1,
-      timeout: 5000,
-      version: device.snmp_version === 3 ? snmp.Version3 : snmp.Version2c
-    };
-    const session = snmp.createSession(device.ip_address,
-      device.snmp_community || 'public', sessionOpts);
+  const fail = (error) => ({
+    reachable: false, protocol: 'snmp', error,
+    cpu: 0, memPercent: 0, memUsed: 0, memTotal: 0,
+    diskPercent: 0, interfaces: [], totalRxMbps: 0, totalTxMbps: 0
+  });
+  if (!snmp) return fail('net-snmp not installed');
 
-    const oids = [
+  const sessionOpts = {
+    port:    device.snmp_port || 161,
+    retries: 1,
+    timeout: 5000,
+    version: device.snmp_version === 3 ? snmp.Version3 : snmp.Version2c
+  };
+  const session = snmp.createSession(device.ip_address,
+    device.snmp_community || 'public', sessionOpts);
+
+  const snmpGet = (oids) => new Promise((resolve, reject) => {
+    session.get(oids, (err, varbinds) => err ? reject(err) : resolve(varbinds || []));
+  });
+  const snmpTable = (oid, columns, maxRep) => new Promise((resolve) => {
+    session.tableColumns(oid, columns, maxRep, (err, table) => resolve((!err && table) ? table : {}));
+  });
+
+  try {
+    const varbinds = await snmpGet([
       SNMP_OIDS.SYSTEM_UPTIME,
-      SNMP_OIDS.MT_CPU_LOAD,
-      SNMP_OIDS.MT_TOTAL_MEMORY,
-      SNMP_OIDS.MT_USED_MEMORY,
       SNMP_OIDS.MT_FIRMWARE
-    ];
+    ]);
+    const [cpuLoad, mem] = await Promise.all([
+      readCpuLoad(session),
+      readMemory(session)
+    ]);
+    const table = await snmpTable(SNMP_OIDS.IF_TABLE, [1, 2, 8, 10, 16], 50);
 
-    session.get(oids, (err, varbinds) => {
-      if (err) {
-        session.close();
-        return resolve({ reachable: false, protocol: 'snmp', error: err.message,
-                         cpu: 0, memPercent: 0, diskPercent: 0, interfaces: [],
-                         totalRxMbps: 0, totalTxMbps: 0 });
-      }
-
-      const get = (oid) => {
-        const vb = varbinds.find(v => v.oid === oid);
-        return vb ? vb.value : null;
-      };
-
-      const totalMem = parseInt(get(SNMP_OIDS.MT_TOTAL_MEMORY)) || 0;
-      const usedMem  = parseInt(get(SNMP_OIDS.MT_USED_MEMORY))  || 0;
-      // MikroTik SNMP memory OIDs return bytes
-      const memPct   = totalMem > 0 ? Math.round((usedMem / totalMem) * 100) : 0;
-      // CPU: MT_CPU_LOAD OID return 0-100 langsung
-      const cpuLoad  = parseInt(get(SNMP_OIDS.MT_CPU_LOAD)) || 0;
-
-      // Get interfaces via tableColumns
-      const ifColumns = [1, 2, 8, 10, 16]; // index, descr, oper, in, out
-      session.tableColumns(SNMP_OIDS.IF_TABLE, ifColumns, 50, (ifErr, table) => {
-        session.close();
-        let interfaces = [], totalRx = 0, totalTx = 0;
-
-        if (!ifErr && table) {
-          Object.values(table).forEach(row => {
-            const rxOctets = parseInt(row[10]) || 0;
-            const txOctets = parseInt(row[16]) || 0;
-            const rxMbps   = (rxOctets * 8) / 1e6;
-            const txMbps   = (txOctets * 8) / 1e6;
-            totalRx += rxMbps;
-            totalTx += txMbps;
-            interfaces.push({
-              name:    row[2]?.toString() || '',
-              running: row[8] === 1,
-              rxMbps:  parseFloat(rxMbps.toFixed(3)),
-              txMbps:  parseFloat(txMbps.toFixed(3))
-            });
-          });
-        }
-
-        resolve({
-          reachable:   true,
-          protocol:    'snmp',
-          cpu:         cpuLoad,
-          memPercent:  memPct,
-          memUsed:     Math.round(usedMem / 1024 / 1024),
-          memTotal:    Math.round(totalMem / 1024 / 1024),
-          diskPercent: 0,
-          uptime:      get(SNMP_OIDS.SYSTEM_UPTIME)?.toString() || '',
-          firmware:    get(SNMP_OIDS.MT_FIRMWARE)?.toString() || '',
-          interfaces,
-          totalRxMbps: parseFloat(totalRx.toFixed(3)),
-          totalTxMbps: parseFloat(totalTx.toFixed(3))
-        });
+    let interfaces = [], totalRx = 0, totalTx = 0;
+    Object.values(table).forEach(row => {
+      const rxOctets = parseInt(row[10]) || 0;
+      const txOctets = parseInt(row[16]) || 0;
+      const rxMbps   = (rxOctets * 8) / 1e6;
+      const txMbps   = (txOctets * 8) / 1e6;
+      totalRx += rxMbps;
+      totalTx += txMbps;
+      interfaces.push({
+        name:    snmpText(row[2]) || '',
+        running: row[8] === 1,
+        rxMbps:  parseFloat(rxMbps.toFixed(3)),
+        txMbps:  parseFloat(txMbps.toFixed(3))
       });
     });
-  });
+
+    return {
+      reachable:   true,
+      protocol:    'snmp',
+      cpu:         cpuLoad,
+      memPercent:  mem.memPercent,
+      memUsed:     mem.memUsed,
+      memTotal:    mem.memTotal,
+      diskPercent: 0,
+      uptime:      formatSnmpUptime(pickVarbind(varbinds, SNMP_OIDS.SYSTEM_UPTIME)?.value),
+      firmware:    snmpText(pickVarbind(varbinds, SNMP_OIDS.MT_FIRMWARE)?.value),
+      interfaces,
+      totalRxMbps: parseFloat(totalRx.toFixed(3)),
+      totalTxMbps: parseFloat(totalTx.toFixed(3))
+    };
+  } catch (e) {
+    return fail(e.message);
+  } finally {
+    try { session.close(); } catch (_) {}
+  }
 }
 
 async function _getMikrotikInterfaces(device) {
@@ -442,10 +427,10 @@ async function _saveLog(deviceId, metrics) {
   try {
     await DeviceLog.create({
       device_id:    deviceId,
-      cpu_load:     metrics.cpu,
+      cpu_load:     parseCpuPercent(metrics.cpu),
       memory_usage: metrics.memPercent,
       uptime:       metrics.uptime,
-      status:       metrics.reachable ? (metrics.cpu > 90 ? 'warning' : 'online') : 'offline',
+      status:       metrics.reachable ? (parseCpuPercent(metrics.cpu) > 90 ? 'warning' : 'online') : 'offline',
       interfaces:   metrics.interfaces,
       raw_data: {
         diskPercent:  metrics.diskPercent,

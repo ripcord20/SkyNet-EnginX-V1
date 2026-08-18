@@ -10,7 +10,9 @@ const { DataTypes } = require('sequelize');
 module.exports = (sequelize) => {
   return sequelize.define('NetworkHealthSnapshot', {
     id:               { type: DataTypes.INTEGER.UNSIGNED, primaryKey: true, autoIncrement: true },
-    device_id:        { type: DataTypes.INTEGER, allowNull: false, unique: true },
+    device_id:        { type: DataTypes.INTEGER, allowNull: false, unique: true,
+      references: { model: 'devices', key: 'id' },
+      onDelete: 'CASCADE' },
     status:           { type: DataTypes.ENUM('online', 'offline', 'warning', 'unknown'), defaultValue: 'unknown' },
     reachable:        { type: DataTypes.BOOLEAN, defaultValue: false },
     rtt_avg:          { type: DataTypes.FLOAT, allowNull: true },

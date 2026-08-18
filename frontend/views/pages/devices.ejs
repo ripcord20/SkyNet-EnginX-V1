@@ -914,9 +914,24 @@
 
   // ── Format uptime: "3d 4h" dst ──
   function fmtUptime(u) {
-    if (!u) return '—';
-    // Kalau sudah string dari MikroTik (e.g. "1w2d"), tampilkan apa adanya
-    return esc(u);
+    if (u == null || u === '') return '—';
+    const s = String(u);
+    // SNMP TimeTicks (hundredths of a second), e.g. 75982900
+    if (/^\d+$/.test(s)) {
+      const sec = Math.floor(parseInt(s, 10) / 100);
+      const days = Math.floor(sec / 86400);
+      const hours = Math.floor((sec % 86400) / 3600);
+      const mins = Math.floor((sec % 3600) / 60);
+      return esc(days + 'd ' + hours + 'h ' + mins + 'm');
+    }
+    return esc(s);
+  }
+
+  // CPU/RAM 0–100 saja. 1400 (cpu-frequency) jangan ditampilkan sebagai %
+  function sanePct(v) {
+    const n = parseFloat(v);
+    if (!Number.isFinite(n) || n < 0 || n > 100) return null;
+    return Math.round(n);
   }
 
   // ── Metric bar color by pct ──
@@ -952,8 +967,8 @@
     }
 
     tbody.innerHTML = list.map(d => {
-      const cpu = d.cpu_load != null ? Math.round(d.cpu_load) : null;
-      const mem = d.memory_usage != null ? Math.round(d.memory_usage) : null;
+      const cpu = sanePct(d.cpu_load);
+      const mem = sanePct(d.memory_usage);
 
       const cpuHtml = cpu != null ? `
         <div class="metric-bar">
@@ -1025,8 +1040,8 @@
     }
 
     wrap.innerHTML = list.map(d => {
-      const cpu = d.cpu_load != null ? Math.round(d.cpu_load) : null;
-      const mem = d.memory_usage != null ? Math.round(d.memory_usage) : null;
+      const cpu = sanePct(d.cpu_load);
+      const mem = sanePct(d.memory_usage);
       const status = d.status || 'offline';
       const type = d.type || 'other';
       const brandLine = [d.brand, d.model].filter(Boolean).join(' · ');
@@ -1042,7 +1057,7 @@
         : `<span class="dm-mcard-stat-val dim">—</span>`;
 
       const uptimeVal = d.uptime
-        ? `<span class="dm-mcard-stat-val">${esc(d.uptime)}</span>`
+        ? `<span class="dm-mcard-stat-val">${fmtUptime(d.uptime)}</span>`
         : `<span class="dm-mcard-stat-val dim">—</span>`;
 
       return `

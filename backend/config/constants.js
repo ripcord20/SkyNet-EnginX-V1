@@ -85,10 +85,14 @@ module.exports = {
     IF_OUT_OCTETS: '1.3.6.1.2.1.2.2.1.16',
     IF_HC_IN_OCTETS: '1.3.6.1.2.1.31.1.1.1.6',
     IF_HC_OUT_OCTETS: '1.3.6.1.2.1.31.1.1.1.10',
+    // HOST-RESOURCES-MIB — walk/table, lalu rata-rata (0–100). Sama seperti WinBox.
     CPU_LOAD: '1.3.6.1.2.1.25.3.3.1.2',
+    HR_PROCESSOR_TABLE: '1.3.6.1.2.1.25.3.3.1',
+    HR_STORAGE_TABLE: '1.3.6.1.2.1.25.2.3.1',
     MEMORY_TOTAL: '1.3.6.1.4.1.14988.1.1.1.1.0',
     MEMORY_USED: '1.3.6.1.4.1.14988.1.1.1.2.0',
-    // Mikrotik specific
+    // Legacy / salah kaprah: mtxrHealth.14 = fan speed, BUKAN CPU.
+    // Disimpan supaya pemanggil lama tidak crash; jangan dipakai untuk cpu_load.
     MT_CPU_LOAD: '1.3.6.1.4.1.14988.1.1.3.14.0',
     MT_TOTAL_MEMORY: '1.3.6.1.2.1.25.2.3.1.5.65536',
     MT_USED_MEMORY: '1.3.6.1.2.1.25.2.3.1.6.65536',

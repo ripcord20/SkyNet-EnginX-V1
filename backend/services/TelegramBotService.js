@@ -35,6 +35,7 @@
 
 const logger = require('../utils/logger');
 const Telegram = require('./TelegramService');
+const { parseResource, parseCpuPercent } = require('../utils/mikrotikResource');
 
 let _running = false;     // loop poll aktif?
 let _stop = false;        // sinyal berhenti
@@ -1532,24 +1533,25 @@ async function _cmdCekMikrotik(chatId, query) {
   }
 
   // Normalisasi nilai (gabungkan raw + parsed).
+  const res = parseResource(raw || {});
   const ident = (identity && (identity.name || identity['name'])) || devLabel || '-';
-  const uptime = (raw && raw.uptime) || (sys && sys.uptime) || '0s';
-  const version = (raw && raw.version) || (sys && sys.version) || '-';
-  const board = (raw && raw['board-name']) || (sys && sys.boardName) || '-';
-  const platform = (raw && raw.platform) || (sys && sys.platform) || '-';
-  const arch = (raw && raw['architecture-name']) || '-';
-  const cpuName = (raw && raw.cpu) || '-';
-  const cpuCount = (raw && raw['cpu-count']) || '-';
-  const cpuFreq = (raw && raw['cpu-frequency']) ? raw['cpu-frequency'] + ' MHz' : '-';
-  const cpuLoad = (sys && sys.cpuLoad != null) ? sys.cpuLoad : (raw ? parseInt(raw['cpu-load']) || 0 : 0);
+  const uptime = res.uptime || (sys && sys.uptime) || '0s';
+  const version = res.version || (sys && sys.version) || '-';
+  const board = res.boardName || (sys && sys.boardName) || '-';
+  const platform = res.platform || (sys && sys.platform) || '-';
+  const arch = res.architecture || '-';
+  const cpuName = res.cpu || '-';
+  const cpuCount = res.cpuCount || '-';
+  const cpuFreq = res.cpuFrequency ? res.cpuFrequency + ' MHz' : '-';
+  const cpuLoad = (sys && sys.cpuLoad != null) ? parseCpuPercent(sys.cpuLoad) : res.cpuLoad;
 
-  const totalMem = (sys && sys.totalMemory) || (raw ? parseInt(raw['total-memory']) || 0 : 0);
-  const freeMem = (sys && sys.freeMemory) || (raw ? parseInt(raw['free-memory']) || 0 : 0);
+  const totalMem = (sys && sys.totalMemory) || res.totalMemory;
+  const freeMem = (sys && sys.freeMemory) || res.freeMemory;
   const usedMem = Math.max(0, totalMem - freeMem);
   const memPct = totalMem > 0 ? Math.round((usedMem / totalMem) * 100) : 0;
 
-  const totalHdd = raw ? parseInt(raw['total-hdd-space']) || 0 : 0;
-  const freeHdd = raw ? parseInt(raw['free-hdd-space']) || 0 : 0;
+  const totalHdd = res.totalHdd;
+  const freeHdd = res.freeHdd;
   const usedHdd = Math.max(0, totalHdd - freeHdd);
   const hddPct = totalHdd > 0 ? Math.round((usedHdd / totalHdd) * 100) : 0;
 
