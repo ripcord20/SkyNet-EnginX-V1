@@ -941,8 +941,17 @@
         <div class="form-group" style="flex:1">
           <label class="form-label">Brand</label>
           <select id="oltBrand" class="form-control" onchange="OltMgmt.onBrandChange()">
-            <option value="zte">ZTE (C320/C300)</option>
+            <option value="zte">ZTE (C300 / C320 / C620)</option>
+            <option value="huawei">Huawei (MA5600T / MA5800)</option>
+            <option value="fiberhome">FiberHome (AN5516 / AN6000)</option>
+            <option value="cdata">CDATA (FD12xx / FD16xx)</option>
+            <option value="vsol">VSOL / OEM GPON</option>
+            <option value="hioso">HIOSO</option>
+            <option value="zimmlink">ZIMMLINK</option>
+            <option value="hsgq">HSGQ EPON (E04 / E08)</option>
+            <option value="generic">Generic GPON (Cortina / Realtek)</option>
           </select>
+          <div class="form-hint" id="oltBrandHint">CLI ZTE: frame/slot/port seperti 1/2/1</div>
         </div>
       </div>
       <div class="form-row">
@@ -1342,6 +1351,6 @@
 
 <script src="/vendor/apexcharts/apexcharts.min.js"></script>
 <script src="/js/app.js"></script>
-<script src="/js/olt-management.js"></script>
+<script src="/js/olt-management.js?v=multivendor1"></script>
 </body>
 </html>

@@ -3,7 +3,10 @@
 /**
  * OltManagementController.js
  * ─────────────────────────────────────────────────────────────────────
- * Controller untuk OLT Management (live CLI ke ZTE C320/C300).
+ * Controller untuk OLT Management (live CLI multi-merek).
+ *
+ * Driver: ZTE C320/C300, Huawei MA5600T/MA5800, FiberHome AN5516,
+ * CDATA/VSOL/OEM Cortina, HIOSO, ZIMMLINK, HSGQ EPON.
  *
  * Berbeda dari OltController (SNMP read-only HSGQ), controller ini
  * terhubung langsung ke CLI OLT untuk membaca status ONU, redaman, dan
@@ -33,6 +36,9 @@ const CdataOltService = require('../services/CdataOltService');
 const HiosoOltService = require('../services/HiosoOltService');
 const ZimmlinkOltService = require('../services/ZimmlinkOltService');
 const HsgqEponOltService = require('../services/HsgqEponOltService');
+const GponCliOltService = require('../services/GponCliOltService');
+const HuaweiOltService = require('../services/HuaweiOltService');
+const FiberhomeOltService = require('../services/FiberhomeOltService');
 const ZteSnmpService = require('../services/ZteSnmpService');
 const ConfigCrypto = require('../utils/ConfigCrypto');
 const oltQueue = require('../services/OltQueue');
@@ -43,9 +49,16 @@ const { logOltAction } = require('../middleware/activityLogger');
 // Merek lain (chipset/EPON) memakai pola port/onu_id.
 const ZTE_STYLE = new Set(['zte']);
 function isZteStyle(brand) { return ZTE_STYLE.has(String(brand || 'zte').toLowerCase()); }
-// Merek EPON (ONU diidentifikasi via MAC, bukan SN GPON).
+const HUAWEI_STYLE = new Set(['huawei']);
+function isHuaweiStyle(brand) { return HUAWEI_STYLE.has(String(brand || '').toLowerCase()); }
 const EPON_BRANDS = new Set(['hsgq']);
 function isEpon(brand) { return EPON_BRANDS.has(String(brand || '').toLowerCase()); }
+function oltUiStyle(brand) {
+  const b = String(brand || 'zte').toLowerCase();
+  if (isZteStyle(b)) return 'zte';
+  if (isHuaweiStyle(b)) return 'huawei';
+  return 'chipset';
+}
 
 const CONFIG_PATH = path.join(__dirname, '../../uploads/olt_mgmt_config.json');
 // Cache hasil discover terakhir per OLT (tidak berisi credential, jadi plain JSON).
@@ -94,7 +107,7 @@ function toSafe(c) {
     name:     c.name,
     host:     c.host,
     brand:    c.brand    || 'zte',
-    style:    isZteStyle(c.brand) ? 'zte' : 'chipset',
+    style:    oltUiStyle(c.brand),
     epon:     isEpon(c.brand),
     protocol: c.protocol || 'telnet',
     port:     c.port,
@@ -125,10 +138,14 @@ function makeService(cfg) {
   };
   let svc;
   switch ((cfg.brand || 'zte').toLowerCase()) {
-    case 'cdata':    svc = new CdataOltService(opts); break;
+    case 'cdata':
+    case 'vsol':     svc = new CdataOltService(opts); break;
+    case 'generic':  svc = new GponCliOltService(opts); break;
     case 'hioso':    svc = new HiosoOltService(opts); break;
     case 'zimmlink': svc = new ZimmlinkOltService(opts); break;
     case 'hsgq':     svc = new HsgqEponOltService(opts); break;
+    case 'huawei':   svc = new HuaweiOltService(opts); break;
+    case 'fiberhome':svc = new FiberhomeOltService(opts); break;
     case 'zte':
     default:         svc = new ZteOltService(opts); break;
   }

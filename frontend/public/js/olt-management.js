@@ -216,7 +216,7 @@ const OltMgmt = {
       bar.innerHTML = `<div class="ot-empty" style="padding:30px 10px;grid-column:1/-1">
         <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="7" rx="2"/><rect x="2" y="13" width="20" height="7" rx="2"/></svg>
         <h3>Belum ada OLT</h3>
-        <p>Tambahkan OLT ZTE C320/C300 untuk mulai mengelola ONU via CLI</p>
+        <p>Tambahkan OLT ZTE, Huawei, FiberHome, CDATA, VSOL, HIOSO, atau merek GPON/EPON lain</p>
         <button class="btn btn-blue btn-sm" onclick="OltMgmt.openAddOlt()">+ Tambah OLT</button>
       </div>`;
       document.getElementById('ponBar').style.display = 'none';
@@ -252,15 +252,15 @@ const OltMgmt = {
     document.getElementById('connLbl').textContent = o ? `Aktif: ${o.name} (${o.host})` : '';
     document.getElementById('ponBar').style.display = 'flex';
     document.getElementById('btnUncfg').disabled = false;
-    // Sesuaikan label & placeholder PON port menurut gaya brand
     const isZte = this.activeStyle === 'zte';
-    document.getElementById('ponBarLbl').textContent = isZte ? 'PON Port (frame/slot/port)' : 'PON Port';
+    const isHuawei = this.activeStyle === 'huawei';
+    const isFrame = isZte || isHuawei;
+    document.getElementById('ponBarLbl').textContent = isFrame ? 'PON Port (frame/slot/port)' : 'PON Port';
     const ponInput = document.getElementById('ponInput');
-    ponInput.placeholder = isZte ? '1/2/1' : '1';
-    ponInput.value = isZte ? '1/2/1' : '';
-    // Placeholder ringkasan port per gaya
-    document.getElementById('summaryPorts').placeholder = isZte ? '1/2/1, 1/2/2, 1/2/3' : '1, 2, 3, 4';
-    document.getElementById('summaryPortsHint').textContent = isZte ? 'format gpon-olt, pisahkan koma' : 'pisahkan dengan koma';
+    ponInput.placeholder = isZte ? '1/2/1' : (isHuawei ? '0/1/0' : '1');
+    ponInput.value = isZte ? '1/2/1' : (isHuawei ? '0/1/0' : '');
+    document.getElementById('summaryPorts').placeholder = isZte ? '1/2/1, 1/2/2, 1/2/3' : (isHuawei ? '0/1/0, 0/1/1' : '1, 2, 3, 4');
+    document.getElementById('summaryPortsHint').textContent = isFrame ? 'format gpon, pisahkan koma' : 'pisahkan dengan koma';
     // Reset state per OLT
     this.onus = []; this.currentPon = null;
     this.trend = [];
@@ -583,10 +583,23 @@ const OltMgmt = {
     document.getElementById('snmpFields').style.display = on ? 'block' : 'none';
   },
 
-  // SNMP hanya relevan untuk ZTE; sembunyikan section untuk brand lain
+  // SNMP hanya relevan untuk ZTE; tampilkan petunjuk CLI per merek
   onBrandChange() {
     const brand = document.getElementById('oltBrand').value;
     document.getElementById('snmpSection').style.display = (brand === 'zte') ? 'block' : 'none';
+    const hints = {
+      zte: 'CLI ZTE: PON berbentuk frame/slot/port (contoh 1/2/1). SNMP opsional untuk monitoring cepat.',
+      huawei: 'CLI Huawei MA5600T/MA5800: PON berbentuk frame/slot/port (contoh 0/1/0). Perlu line/srv profile di OLT (default id 1).',
+      fiberhome: 'CLI FiberHome AN5516: PON nomor port (1, 2, 3…). Perintah berbeda antar firmware — uji Test Koneksi dulu.',
+      cdata: 'CLI CDATA Cortina: interface gpon 0/N. Default pabrik sering admin / Xpon@Olt9417#.',
+      vsol: 'VSOL dan banyak OEM GPON memakai pola CLI yang sama dengan CDATA.',
+      hioso: 'CLI HIOSO: interface gpon 1/N, perintah ont confirm / show ont info.',
+      zimmlink: 'ZIMMLINK memakai pola CLI sekeluarga CDATA (Cortina).',
+      hsgq: 'HSGQ EPON: ONU diidentifikasi MAC, bukan serial GPON. PON 1–4 (E04) atau 1–8 (E08).',
+      generic: 'Generic GPON untuk OLT OEM Cortina/Realtek yang perintahnya mirip CDATA. Uji 1 ONU sebelum produksi.',
+    };
+    const el = document.getElementById('oltBrandHint');
+    if (el) el.textContent = hints[brand] || hints.generic;
   },
 
   async saveOlt() {
