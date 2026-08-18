@@ -1,5 +1,7 @@
 const { sequelize } = require('../models');
 const logger = require('../utils/logger');
+const { parseCpuPercent } = require('../utils/mikrotikResource');
+const { formatSnmpUptime } = require('../utils/snmpMetrics');
 
 console.log('[TopologyController] Loading ULTIMATE SIMPLE VERSION v2');
 
@@ -148,8 +150,8 @@ async function fetchSNMPStats(host, community = 'public') {
 
         const sysDescr = varbinds[0]?.value?.toString() || 'Unknown';
         const sysName = varbinds[1]?.value?.toString() || 'Unknown';
-        const sysUpTime = varbinds[2]?.value?.toString() || '0';
-        const cpuLoad = parseInt(varbinds[3]?.value) || 0;
+        const sysUpTime = formatSnmpUptime(varbinds[2]?.value);
+        const cpuLoad = parseCpuPercent(varbinds[3]?.value);
         const storageSize = parseInt(varbinds[4]?.value) || 0;
         const storageUsed = parseInt(varbinds[5]?.value) || 0;
         const allocationUnits = parseInt(varbinds[6]?.value) || 1;

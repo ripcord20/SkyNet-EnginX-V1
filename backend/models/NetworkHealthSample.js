@@ -9,7 +9,9 @@ const { DataTypes } = require('sequelize');
 module.exports = (sequelize) => {
   return sequelize.define('NetworkHealthSample', {
     id:          { type: DataTypes.BIGINT.UNSIGNED, primaryKey: true, autoIncrement: true },
-    device_id:   { type: DataTypes.INTEGER, allowNull: false },
+    device_id:   { type: DataTypes.INTEGER, allowNull: false,
+      references: { model: 'devices', key: 'id' },
+      onDelete: 'CASCADE' },
     rtt_avg:     { type: DataTypes.FLOAT, allowNull: true },
     packet_loss: { type: DataTypes.FLOAT, allowNull: true },
     cpu:         { type: DataTypes.FLOAT, allowNull: true },

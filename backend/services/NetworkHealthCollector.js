@@ -16,6 +16,7 @@ const { exec } = require('child_process');
 const dns = require('dns').promises;
 const net = require('net');
 const logger = require('../utils/logger');
+const { parseResource } = require('../utils/mikrotikResource');
 
 const KEYS = {
   enabled:  'nhealth_enabled',
@@ -205,16 +206,17 @@ async function pollMikrotik(device, cfg) {
   ]);
 
   if (resRaw) {
-    const totalMem = num(resRaw['total-memory']);
-    const freeMem = num(resRaw['free-memory']);
-    const totalHdd = num(resRaw['total-hdd-space']);
-    const freeHdd = num(resRaw['free-hdd-space']);
-    metrics.cpu = num(resRaw['cpu-load']);
+    const res = parseResource(resRaw);
+    const totalMem = res.totalMemory;
+    const freeMem = res.freeMemory;
+    const totalHdd = res.totalHdd;
+    const freeHdd = res.freeHdd;
+    metrics.cpu = res.cpuLoad;
     metrics.ram = totalMem > 0 ? Math.round(((totalMem - freeMem) / totalMem) * 100) : null;
     metrics.disk = totalHdd > 0 ? Math.round(((totalHdd - freeHdd) / totalHdd) * 100) : null;
-    extra.board = resRaw['board-name'] || null;
-    extra.version = resRaw.version || null;
-    extra.uptime = resRaw.uptime || null;
+    extra.board = res.boardName || null;
+    extra.version = res.version || null;
+    extra.uptime = res.uptime || null;
   }
 
   if (cfg.tier2) {

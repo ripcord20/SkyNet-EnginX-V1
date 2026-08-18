@@ -372,10 +372,10 @@ NocMonitorPreset.belongsTo(User,   { foreignKey: 'user_id',   as: 'user'   });
 NocMonitorPreset.belongsTo(Device, { foreignKey: 'router_id', as: 'router' });
 NmsInterfacePreset.belongsTo(Device, { foreignKey: 'router_id', as: 'router' });
 
-NetworkHealthSnapshot.belongsTo(Device, { foreignKey: 'device_id', as: 'device' });
-Device.hasOne(NetworkHealthSnapshot, { foreignKey: 'device_id', as: 'health_snapshot' });
-NetworkHealthSample.belongsTo(Device, { foreignKey: 'device_id', as: 'device' });
-Device.hasMany(NetworkHealthSample, { foreignKey: 'device_id', as: 'health_samples' });
+NetworkHealthSnapshot.belongsTo(Device, { foreignKey: 'device_id', as: 'device', onDelete: 'CASCADE' });
+Device.hasOne(NetworkHealthSnapshot, { foreignKey: 'device_id', as: 'health_snapshot', onDelete: 'CASCADE' });
+NetworkHealthSample.belongsTo(Device, { foreignKey: 'device_id', as: 'device', onDelete: 'CASCADE' });
+Device.hasMany(NetworkHealthSample, { foreignKey: 'device_id', as: 'health_samples', onDelete: 'CASCADE' });
 User.hasMany(NocMonitorPreset,     { foreignKey: 'user_id',   as: 'noc_monitor_presets' });
 
 // ── Sales module associations ─────────────────────────────────

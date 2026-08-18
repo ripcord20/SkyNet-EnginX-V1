@@ -1,7 +1,9 @@
 const logger = require('../utils/logger');
 const { Device, DeviceLog, TrafficData, Notification, User } = require('../models');
 const { SNMP_OIDS, DEVICE_STATUS } = require('../config/constants');
-const { formatUptime, sanitizeSnmpValue } = require('../utils/helpers');
+const { parseCpuPercent } = require('../utils/mikrotikResource');
+const { sanitizeSnmpValue } = require('../utils/helpers');
+const { readCpuLoad, readMemory, formatSnmpUptime, pickVarbind } = require('../utils/snmpMetrics');
 
 let snmp;
 try {
@@ -89,7 +91,7 @@ class SNMPService {
       const prevStatus = device.status;
       await Device.update({
         status: DEVICE_STATUS.ONLINE,
-        cpu_load: data.cpu || 0,
+        cpu_load: parseCpuPercent(data.cpu),
         memory_usage: data.memory || 0,
         uptime: data.uptime || '',
         firmware: data.firmware || device.firmware,
@@ -100,7 +102,7 @@ class SNMPService {
       try {
         await DeviceLog.create({
           device_id: device.id,
-          cpu_load: data.cpu || 0,
+          cpu_load: parseCpuPercent(data.cpu),
           memory_usage: data.memory || 0,
           uptime: data.uptime || '',
           status: 'online',
@@ -119,7 +121,7 @@ class SNMPService {
         this.io.to(`device_${device.id}`).emit('device:update', {
           device_id: device.id,
           status: 'online',
-          cpu_load: data.cpu,
+          cpu_load: parseCpuPercent(data.cpu),
           memory_usage: data.memory,
           uptime: data.uptime,
           interfaces: data.interfaces,
@@ -130,7 +132,7 @@ class SNMPService {
           device_id: device.id,
           name: device.name,
           status: 'online',
-          cpu_load: data.cpu,
+          cpu_load: parseCpuPercent(data.cpu),
           memory_usage: data.memory
         });
       }
@@ -142,9 +144,9 @@ class SNMPService {
       }
 
       // CPU overload alert
-      if (data.cpu > 90) {
+      if (parseCpuPercent(data.cpu) > 90) {
         await this.createAlert(device, 'cpu_overload', 'warning',
-          `CPU load on ${device.name}: ${data.cpu}%`);
+          `CPU load on ${device.name}: ${parseCpuPercent(data.cpu)}%`);
       }
 
     } catch (error) {
@@ -182,48 +184,40 @@ class SNMPService {
     }
   }
 
-  getDeviceData(session, device) {
-    return new Promise((resolve, reject) => {
-      const oids = [
-        SNMP_OIDS.SYSTEM_UPTIME,
-        SNMP_OIDS.SYSTEM_NAME,
-        SNMP_OIDS.SYSTEM_DESCR
-      ];
+  async getDeviceData(session, device) {
+    const oids = [
+      SNMP_OIDS.SYSTEM_UPTIME,
+      SNMP_OIDS.SYSTEM_NAME,
+      SNMP_OIDS.SYSTEM_DESCR,
+      SNMP_OIDS.MT_FIRMWARE
+    ];
 
-      // Add Mikrotik specific OIDs
-      if (device.brand?.toLowerCase() === 'mikrotik') {
-        oids.push(SNMP_OIDS.MT_CPU_LOAD);
-        oids.push(SNMP_OIDS.MT_TOTAL_MEMORY);
-        oids.push(SNMP_OIDS.MT_USED_MEMORY);
-        oids.push(SNMP_OIDS.MT_FIRMWARE);
-      }
-
-      session.get(oids, (error, varbinds) => {
-        if (error) return reject(error);
-
-        const data = { cpu: 0, memory: 0, uptime: '', firmware: '', interfaces: [] };
-
-        for (const vb of varbinds) {
-          if (snmp.isVarbindError(vb)) continue;
-
-          const oid = vb.oid.join ? vb.oid.join('.') : vb.oid;
-          
-          if (oid === SNMP_OIDS.SYSTEM_UPTIME) {
-            data.uptime = formatUptime(vb.value);
-          } else if (oid === SNMP_OIDS.MT_CPU_LOAD) {
-            data.cpu = parseInt(vb.value) || 0;
-          } else if (oid === SNMP_OIDS.MT_FIRMWARE) {
-            data.firmware = sanitizeSnmpValue(vb) || '';
-          }
-        }
-
-        // Get interface data
-        this.getInterfaces(session).then(interfaces => {
-          data.interfaces = interfaces;
-          resolve(data);
-        }).catch(() => resolve(data));
-      });
+    const varbinds = await new Promise((resolve, reject) => {
+      session.get(oids, (error, vbs) => error ? reject(error) : resolve(vbs || []));
     });
+
+    const data = { cpu: 0, memory: 0, uptime: '', firmware: '', interfaces: [] };
+    const upVb = pickVarbind(varbinds, SNMP_OIDS.SYSTEM_UPTIME);
+    if (upVb && !snmp.isVarbindError(upVb)) {
+      data.uptime = formatSnmpUptime(upVb.value);
+    }
+    const fwVb = pickVarbind(varbinds, SNMP_OIDS.MT_FIRMWARE);
+    if (fwVb && !snmp.isVarbindError(fwVb)) {
+      data.firmware = sanitizeSnmpValue(fwVb) || '';
+    }
+
+    try {
+      data.cpu = await readCpuLoad(session);
+      const mem = await readMemory(session);
+      data.memory = mem.memPercent;
+    } catch (_) { /* CPU/RAM optional */ }
+
+    try {
+      data.interfaces = await this.getInterfaces(session);
+    } catch (_) {
+      data.interfaces = [];
+    }
+    return data;
   }
 
   getInterfaces(session) {

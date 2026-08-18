@@ -6,6 +6,7 @@
 const axios = require('axios');
 const logger = require('../utils/logger');
 const { MikrotikApiClient } = require('./MikrotikApiClient');
+const { parseResource, unwrapRestData, unwrapSingleton } = require('../utils/mikrotikResource');
 
 /**
  * Port → protokol detection (FALLBACK MODE — dipakai kalau caller tidak
@@ -210,7 +211,9 @@ class MikrotikService {
       if (debug && isWrite) {
         logger.info(`[MT] ← ${method} ${endpoint} status=${res.status} data=${redactSecrets(res.data)}`);
       }
-      return res.data;
+      // REST v7 mengembalikan ARRAY untuk singleton (/system/resource, identity, …).
+      // Unwrap supaya pemanggil bisa baca r['cpu-load'] seperti binary API.
+      return unwrapRestData(endpoint, res.data);
     } catch (err) {
       // RouterOS v7 sering drop koneksi SETELAH operasi write berhasil
       // ECONNRESET pada write = operasi sudah dieksekusi, anggap sukses
@@ -911,17 +914,24 @@ class MikrotikService {
 
   // ── SYSTEM ─────────────────────────────────────────────────
   async getSystemResource() {
-    const r = await this.get('/system/resource');
+    const parsed = parseResource(await this.get('/system/resource'));
     return {
-      uptime: r.uptime || '0s', version: r.version || '',
-      boardName: r['board-name'] || '', platform: r.platform || '',
-      cpuLoad: parseInt(r['cpu-load']) || 0,
-      freeMemory: parseInt(r['free-memory']) || 0,
-      totalMemory: parseInt(r['total-memory']) || 0
+      uptime: parsed.uptime,
+      version: parsed.version,
+      boardName: parsed.boardName,
+      platform: parsed.platform,
+      cpuLoad: parsed.cpuLoad,
+      freeMemory: parsed.freeMemory,
+      totalMemory: parsed.totalMemory,
+      freeHdd: parsed.freeHdd,
+      totalHdd: parsed.totalHdd,
     };
   }
 
-  async getSystemIdentity() { return this.get('/system/identity'); }
+  async getSystemIdentity() {
+    const r = unwrapSingleton(await this.get('/system/identity'));
+    return { name: r.name || '' };
+  }
 
   /**
    * Ambil top destination dari /ip/firewall/connection (connection tracking).

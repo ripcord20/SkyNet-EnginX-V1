@@ -1,6 +1,7 @@
 const { Device, DeviceLog, TrafficData, sequelize } = require('../models');
 const { Op } = require('sequelize');
 const { paginateResponse } = require('../utils/helpers');
+const { parseCpuPercent } = require('../utils/mikrotikResource');
 const net = require('net');
 const logger = require('../utils/logger');
 
@@ -163,11 +164,13 @@ class DeviceController {
       // tidak ada (mis. fitur belum migrate), catch & lanjut.
       const cleanups = [
         // Sequelize models (sudah ada di codebase)
-        { name: 'DeviceLog',           where: { device_id: device.id } },
-        { name: 'TrafficData',         where: { device_id: device.id } },
-        { name: 'NocMonitorPreset',    where: { router_id: device.id } },
+        { name: 'DeviceLog',            where: { device_id: device.id } },
+        { name: 'TrafficData',          where: { device_id: device.id } },
+        { name: 'NocMonitorPreset',     where: { router_id: device.id } },
         // FK ON DELETE NO ACTION — tanpa ini hapus device gagal & row tetap tampil
-        { name: 'NmsInterfacePreset',  where: { router_id: device.id } },
+        { name: 'NmsInterfacePreset',   where: { router_id: device.id } },
+        { name: 'NetworkHealthSample',  where: { device_id: device.id } },
+        { name: 'NetworkHealthSnapshot',where: { device_id: device.id } },
       ];
 
       for (const c of cleanups) {
@@ -200,6 +203,36 @@ class DeviceController {
         }
       } catch (e) {
         logger.warn(`[Device.destroy] customer unlink skipped: ${e.message}`);
+      }
+
+      // Job PPPoE bulk — hapus item dulu (FK job_id), baru header-nya.
+      try {
+        const { PppoeProvisionJob, PppoeProvisionItem } = require('../models');
+        if (PppoeProvisionJob && PppoeProvisionItem) {
+          const jobs = await PppoeProvisionJob.findAll({
+            where: { device_id: device.id }, attributes: ['id'], transaction: t
+          });
+          const jobIds = jobs.map(j => j.id);
+          if (jobIds.length) {
+            await PppoeProvisionItem.destroy({ where: { job_id: jobIds }, transaction: t });
+            await PppoeProvisionJob.destroy({ where: { device_id: device.id }, transaction: t });
+          }
+        }
+      } catch (e) {
+        logger.warn(`[Device.destroy] pppoe provision cleanup skipped: ${e.message}`);
+      }
+
+      // Reseller: jangan hapus akun, hanya lepas tautan router
+      try {
+        const { Reseller, ResellerVoucherPackage } = require('../models');
+        if (Reseller) {
+          await Reseller.update({ device_id: null }, { where: { device_id: device.id }, transaction: t });
+        }
+        if (ResellerVoucherPackage) {
+          await ResellerVoucherPackage.update({ device_id: null }, { where: { device_id: device.id }, transaction: t });
+        }
+      } catch (e) {
+        logger.warn(`[Device.destroy] reseller unlink skipped: ${e.message}`);
       }
 
       // Generic raw SQL cleanup untuk child tables yang tidak punya model di Sequelize
@@ -251,6 +284,8 @@ class DeviceController {
         `DELETE FROM hotspot_traffic_log WHERE device_id = ?`,
         `DELETE FROM nms_interfaces WHERE device_id = ?`,
         `DELETE FROM monitor_states WHERE kind = 'device' AND ref_id = ?`,
+        `DELETE FROM network_health_samples WHERE device_id = ?`,
+        `DELETE FROM network_health_snapshots WHERE device_id = ?`,
       ];
       for (const sql of rawCleanups) {
         try {
@@ -558,7 +593,7 @@ class DeviceController {
           if (result.resource) {
             await device.update({
               status: 'online',
-              cpu_load: result.resource.cpuLoad,
+              cpu_load: parseCpuPercent(result.resource.cpuLoad),
               memory_usage: result.resource.totalMemory > 0
                 ? Math.round(((result.resource.totalMemory - result.resource.freeMemory) / result.resource.totalMemory) * 100)
                 : 0,
