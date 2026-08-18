@@ -751,6 +751,17 @@ const startServer = async () => {
       logger.warn('Failed to migrate customers.carry_over_amount: ' + (e.message || e));
     }
 
+    // ── Migrasi: infrastructure_points.type + 'jb' (Joint Box) ─────────────
+    try {
+      await db.sequelize.query(
+        `ALTER TABLE infrastructure_points
+           MODIFY COLUMN type ENUM('odp','odc','ont','customer','pop','tower','jb') NOT NULL`
+      );
+      logger.info('Migrated: infrastructure_points.type includes jb');
+    } catch (e) {
+      logger.warn('Failed to migrate infrastructure_points.type jb: ' + (e.message || e));
+    }
+
     // ── Migrasi: kolom verifikasi pembayaran manual (invoices) ──────────────
     // verification_status: alur konfirmasi MANUAL saja (transfer bank + bukti).
     //   none      = belum ada pengajuan

@@ -62,7 +62,7 @@
     .ip{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #eef1f6;border-radius:15px;padding:13px 15px;}
     .ip-ic{width:44px;height:44px;border-radius:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:800;font-size:11px;}
     .ip-ic svg{width:20px;height:20px;stroke-width:1.8;}
-    .t-odp{background:#e0f2fe;color:#0ea5e9;} .t-odc{background:#e0f2fe;color:#0369a1;} .t-pop{background:#ede9ff;color:#6b4fd8;} .t-tower{background:#fef1db;color:#c67d0a;} .t-ont{background:#dcf7ec;color:#0f9d63;} .t-customer{background:#f0f3f9;color:#6b7a97;}
+    .t-odp{background:#e0f2fe;color:#0ea5e9;} .t-odc{background:#e0f2fe;color:#0369a1;} .t-jb{background:#ccfbf1;color:#0f766e;} .t-pop{background:#ede9ff;color:#6b4fd8;} .t-tower{background:#fef1db;color:#c67d0a;} .t-ont{background:#dcf7ec;color:#0f9d63;} .t-customer{background:#f0f3f9;color:#6b7a97;}
     .ip-body{flex:1;min-width:0;}
     .ip-name{font-size:13.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
     .ip-meta{font-size:11.5px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -114,6 +114,7 @@
         <div class="chip sel" data-t="">Semua</div>
         <div class="chip" data-t="pop">POP</div>
         <div class="chip" data-t="odc">ODC</div>
+        <div class="chip" data-t="jb">JB</div>
         <div class="chip" data-t="odp">ODP</div>
         <div class="chip" data-t="tower">Tower</div>
         <div class="chip" data-t="ont">ONT</div>
@@ -143,8 +144,8 @@
     async function api(url){ const t=getToken(); const headers=Object.assign({'Content-Type':'application/json'}, t?{'Authorization':'Bearer '+t}:{}); try{ const r=await fetch(url,{credentials:'include',headers}); if(r.status===401){location.href='/login';return null;} const x=await r.text(); try{return x?JSON.parse(x):null;}catch(_){return null;} }catch(e){return null;} }
     function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
     let _type='', _all=[];
-    const TYPE_LABEL={odp:'ODP',odc:'ODC',pop:'POP',tower:'Tower',ont:'ONT',customer:'Pelanggan'};
-    const TYPE_COLOR={odc:'#1d4ed8',odp:'#104396',pop:'#ef4444',tower:'#475569',ont:'#f97316',customer:'#f97316'};
+    const TYPE_LABEL={odp:'ODP',odc:'ODC',jb:'JB',pop:'POP',tower:'Tower',ont:'ONT',customer:'Pelanggan'};
+    const TYPE_COLOR={odc:'#1d4ed8',jb:'#0d9488',odp:'#104396',pop:'#ef4444',tower:'#475569',ont:'#f97316',customer:'#f97316'};
     let _map=null, _markers=null, _mapReady=false, _tileStreet=null, _tileSat=null, _mapMode='street';
 
     function initMap(){
@@ -157,7 +158,7 @@
       _markers=L.layerGroup().addTo(_map);
       _mapReady=true;
       // legend
-      const types=['pop','odc','odp','tower','ont'];
+      const types=['pop','odc','jb','odp','tower','ont'];
       document.getElementById('mapLegend').innerHTML=types.map(t=>'<div class="lg-item"><span class="lg-dot" style="background:'+TYPE_COLOR[t]+';"></span>'+TYPE_LABEL[t]+'</div>').join('');
     }
     function setMapMode(mode){
@@ -211,7 +212,7 @@
     }
     // Breakdown jumlah per tipe (klik = filter, sinkron dengan chip)
     function renderBreakdown(){
-      const types=['pop','odc','odp','tower','ont'];
+      const types=['pop','odc','jb','odp','tower','ont'];
       const counts={}; _all.forEach(function(p){ const t=(p.type||'').toLowerCase(); counts[t]=(counts[t]||0)+1; });
       document.getElementById('brkGrid').innerHTML=types.map(function(t){
         const sel=(_type===t)?' sel':'';

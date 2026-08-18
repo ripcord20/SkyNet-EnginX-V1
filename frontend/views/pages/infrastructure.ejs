@@ -83,6 +83,8 @@
     .chip-customer.active{ background:#f97316; color:#fff; }
     .chip-pop     { border-color:#ef4444; color:#ef4444; background:transparent; }
     .chip-pop.active     { background:#ef4444; color:#fff; }
+    .chip-jb      { border-color:#0d9488; color:#0d9488; background:transparent; }
+    .chip-jb.active      { background:#0d9488; color:#fff; }
 
     /* ── Responsive mobile ── */
     @media (max-width: 768px) {
@@ -881,6 +883,7 @@
             <div class="filter-chips map-filter-desktop">
               <div class="chip chip-all active" data-type="" onclick="setFilter('',this)"><span class="chip-dot" style="background:#64748b"></span>Semua</div>
               <div class="chip chip-odc" data-type="odc" onclick="setFilter('odc',this)"><span class="chip-dot" style="background:#1d4ed8"></span>ODC</div>
+              <div class="chip chip-jb" data-type="jb" onclick="setFilter('jb',this)"><span class="chip-dot" style="background:#0d9488"></span>JB</div>
               <div class="chip chip-odp" data-type="odp" onclick="setFilter('odp',this)"><span class="chip-dot" style="background:#3b82f6"></span>ODP</div>
               <div class="chip chip-tower" data-type="tower" onclick="setFilter('tower',this)"><span class="chip-dot" style="background:#475569"></span>Tiang</div>
               <div class="chip chip-customer" data-type="customer" onclick="setFilter('customer',this)"><span class="chip-dot" style="background:#f97316"></span>Pelanggan</div>
@@ -892,6 +895,7 @@
           <div class="filter-chips map-filter-mobile">
             <div class="chip chip-all active" data-type="" onclick="setFilter('',this)"><span class="chip-dot" style="background:#64748b"></span>Semua</div>
             <div class="chip chip-odc" data-type="odc" onclick="setFilter('odc',this)"><span class="chip-dot" style="background:#1d4ed8"></span>ODC</div>
+            <div class="chip chip-jb" data-type="jb" onclick="setFilter('jb',this)"><span class="chip-dot" style="background:#0d9488"></span>JB</div>
             <div class="chip chip-odp" data-type="odp" onclick="setFilter('odp',this)"><span class="chip-dot" style="background:#3b82f6"></span>ODP</div>
             <div class="chip chip-tower" data-type="tower" onclick="setFilter('tower',this)"><span class="chip-dot" style="background:#475569"></span>Tiang</div>
             <div class="chip chip-customer" data-type="customer" onclick="setFilter('customer',this)"><span class="chip-dot" style="background:#f97316"></span>Pelanggan</div>
@@ -933,6 +937,7 @@
         <div class="map-stats">
           <div class="stat-item"><div class="stat-dot" style="background:#22c55e;box-shadow:0 0 5px rgba(34,197,94,.6)"></div><span class="stat-val" id="st-online" style="color:#22c55e">0</span><span class="stat-lbl">Online</span></div>
           <div class="stat-item"><div class="stat-dot" style="background:#1d4ed8"></div><span class="stat-val" id="st-odc">0</span><span class="stat-lbl">ODC</span></div>
+          <div class="stat-item"><div class="stat-dot" style="background:#0d9488"></div><span class="stat-val" id="st-jb">0</span><span class="stat-lbl">JB</span></div>
           <div class="stat-item"><div class="stat-dot" style="background:#3b82f6"></div><span class="stat-val" id="st-odp">0</span><span class="stat-lbl">ODP</span></div>
           <div class="stat-item"><div class="stat-dot" style="background:#475569"></div><span class="stat-val" id="st-tower">0</span><span class="stat-lbl">Tiang</span></div>
           <div class="stat-item"><div class="stat-dot" style="background:#f97316"></div><span class="stat-val" id="st-cust">0</span><span class="stat-lbl">Pelanggan</span></div>
@@ -954,6 +959,7 @@
     </div>
     <div class="modal-tabs" id="modalTabs">
       <button class="modal-tab active" data-tab="odc" onclick="switchTab('odc',this)">ODC</button>
+      <button class="modal-tab" data-tab="jb" onclick="switchTab('jb',this)">JB</button>
       <button class="modal-tab" data-tab="odp" onclick="switchTab('odp',this)">ODP</button>
       <button class="modal-tab" data-tab="tower" onclick="switchTab('tower',this)">Tiang</button>
       <button class="modal-tab" data-tab="pop" onclick="switchTab('pop',this)">POP</button>
@@ -1053,6 +1059,22 @@
         </div>
       </div>
 
+      <!-- Joint Box -->
+      <div class="tab-panel" id="tab-jb">
+        <div class="form-group"><label class="form-label">Nama Joint Box *</label><input type="text" class="form-control" id="jb-name" placeholder="mis. JB-BGR-001"></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Kapasitas Core / Splice</label><input type="number" class="form-control" id="jb-capacity" placeholder="24" min="1"></div>
+          <div class="form-group"><label class="form-label">Core Terpakai</label><input type="number" class="form-control" id="jb-used" placeholder="0" min="0"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Parent (ODC atau POP) <span style="color:#94a3b8;text-transform:none;letter-spacing:0;font-weight:500;font-size:11px">— opsional</span></label>
+          <select class="form-control" id="jb-parent"><option value="">-- Tidak ada --</option></select>
+        </div>
+        <div class="form-group"><label class="form-label">Alamat</label><input type="text" class="form-control" id="jb-address" placeholder="Alamat lokasi Joint Box"></div>
+        <div class="form-group"><label class="form-label">Status</label><select class="form-control" id="jb-status"><option value="active">Active</option><option value="inactive">Inactive</option><option value="maintenance">Maintenance</option></select></div>
+        <div class="form-group"><label class="form-label">Catatan</label><textarea class="form-control" id="jb-notes" rows="2" placeholder="Catatan..."></textarea></div>
+      </div>
+
       <!-- ODP -->
       <div class="tab-panel" id="tab-odp">
         <div class="form-group"><label class="form-label">Nama ODP *</label><input type="text" class="form-control" id="odp-name" placeholder="mis. ODP-BGR-001-A"></div>
@@ -1061,7 +1083,7 @@
           <div class="form-group"><label class="form-label">Port Terpakai</label><input type="number" class="form-control" id="odp-used" placeholder="0" min="0"></div>
         </div>
         <div class="form-group">
-          <label class="form-label">Parent ODC <span style="color:#94a3b8;text-transform:none;letter-spacing:0;font-weight:500;font-size:11px">— opsional, otomatis terisi saat Draw Link</span></label>
+          <label class="form-label">Parent (ODC atau JB) <span style="color:#94a3b8;text-transform:none;letter-spacing:0;font-weight:500;font-size:11px">— opsional, otomatis terisi saat Draw Link</span></label>
           <select class="form-control" id="odp-parent"><option value="">-- Tidak ada --</option></select>
         </div>
         <div class="form-group"><label class="form-label">Alamat</label><input type="text" class="form-control" id="odp-address" placeholder="Alamat lokasi ODP"></div>
@@ -1339,7 +1361,7 @@ window.customConfirm = function(opts) {
 
   const TYPE_META = {
     customer: { label: 'Pelanggan', color: '#f97316', order: 1 },
-    odp:      { label: 'ODP',       color: '#3b82f6', order: 2 },
+    jb:       { label: 'JB',        color: '#0d9488', order: 2.5 },
     odc:      { label: 'ODC',       color: '#1d4ed8', order: 3 },
     pop:      { label: 'POP',       color: '#ef4444', order: 4 },
     tower:    { label: 'Tiang',     color: '#475569', order: 5 },
@@ -1736,6 +1758,6 @@ window.customConfirm = function(opts) {
 <script src="/js/app.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-<script src="/js/infrastructure.js?v=1781702500"></script>
+<script src="/js/infrastructure.js?v=jb1"></script>
 </body>
 </html>
