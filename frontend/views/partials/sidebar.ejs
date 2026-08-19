@@ -90,7 +90,7 @@
         <span>Kesehatan Jaringan</span>
       </a>
       <% const _nNet = ['nms','traffic','queue','ippool','firewall'].includes(active); %>
-      <% const _nAcc = ['pppoe','wireguard','nas','hotspot','reseller-voucher'].includes(active); %>
+      <% const _nAcc = ['pppoe','nas','hotspot','reseller-voucher'].includes(active); %>
       <% const _nDev = ['devices','device-monitor','ping','ping-monitor','olt-management','genieacs'].includes(active); %>
       <div class="nav-group open" data-nav-group="noc-net">
         <button type="button" class="nav-item nav-group-toggle <%= _nNet ? 'active' : '' %>" onclick="toggleNavGroup(this)">
@@ -113,7 +113,6 @@
         </button>
         <div class="nav-group-children">
           <a href="/monitoring/pppoe" class="nav-sub <%= active === 'pppoe' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>PPPoE</span><span class="nav-badge blue" id="pppoe-count" style="display:none">0</span></a>
-          <a href="/monitoring/wireguard" class="nav-sub <%= active === 'wireguard' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>WireGuard</span></a>
           <a href="/monitoring/nas" class="nav-sub <%= active === 'nas' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>NAS RADIUS</span></a>
           <a href="/monitoring/hotspot" class="nav-sub <%= active === 'hotspot' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>Hotspot</span></a>
           <a href="/reseller-voucher" class="nav-sub <%= active === 'reseller-voucher' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>Reseller Voucher</span></a>
@@ -401,7 +400,7 @@
         <span>Kesehatan Jaringan</span>
       </a>
       <% const _aNet = ['nms','traffic','queue','ippool','firewall'].includes(active); %>
-      <% const _aAcc = ['pppoe','wireguard','nas','hotspot','voucher-template'].includes(active); %>
+      <% const _aAcc = ['pppoe','nas','hotspot','voucher-template'].includes(active); %>
       <% const _aDev = ['devices','device-monitor','ping-monitor','ping','olt-management','genieacs'].includes(active); %>
       <div class="nav-group open" data-nav-group="adm-net">
         <button type="button" class="nav-item nav-group-toggle <%= _aNet ? 'active' : '' %>" onclick="toggleNavGroup(this)">
@@ -424,7 +423,6 @@
         </button>
         <div class="nav-group-children">
           <a href="/monitoring/pppoe" class="nav-sub <%= active === 'pppoe' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>PPPoE</span><span class="nav-badge blue" id="pppoe-count" style="display:none">0</span></a>
-          <a href="/monitoring/wireguard" class="nav-sub <%= active === 'wireguard' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>WireGuard</span></a>
           <a href="/monitoring/nas" class="nav-sub <%= active === 'nas' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>NAS RADIUS</span></a>
           <a href="/monitoring/hotspot" class="nav-sub <%= active === 'hotspot' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>Hotspot</span></a>
           <a href="/voucher-template" class="nav-sub <%= active === 'voucher-template' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>Template Voucher</span></a>
