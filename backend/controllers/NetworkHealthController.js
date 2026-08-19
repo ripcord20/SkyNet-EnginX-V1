@@ -1,8 +1,9 @@
 'use strict';
 
 const Collector = require('../services/NetworkHealthCollector');
-const { NetworkHealthSnapshot, NetworkHealthSample, Device } = require('../models');
+const { NetworkHealthSnapshot, NetworkHealthSample, Device, InfrastructurePoint } = require('../models');
 const { Op } = require('sequelize');
+const { INFRA_DEVICE_TYPES, bgpSummary } = require('../utils/networkHealthMetrics');
 
 exports.status = async (req, res) => {
   try {
@@ -67,50 +68,52 @@ exports.overview = async (req, res) => {
       });
     }
 
-    const rows = await NetworkHealthSnapshot.findAll({
-      include: [{
-        model: Device,
-        as: 'device',
-        attributes: ['id', 'name', 'ip_address', 'type', 'brand', 'model', 'location', 'status'],
-        required: false,
-      }],
-      order: [['device_id', 'ASC']],
+    const rows = await Device.findAll({
+      where: {
+        is_active: true,
+        type: { [Op.in]: INFRA_DEVICE_TYPES },
+      },
+      attributes: ['id', 'name', 'ip_address', 'type', 'brand', 'model', 'location', 'status', 'pop_id', 'api_username'],
+      include: [
+        { model: NetworkHealthSnapshot, as: 'health_snapshot', required: false },
+        { model: InfrastructurePoint, as: 'pop', attributes: ['id', 'name', 'type'], required: false },
+      ],
+      order: [['id', 'ASC']],
+      limit: 80,
     });
 
-    const orphanIds = rows.filter(r => !r.device).map(r => r.device_id).filter(Boolean);
-    if (orphanIds.length) {
-      await NetworkHealthSnapshot.destroy({ where: { device_id: { [Op.in]: orphanIds } } }).catch(() => {});
-      await NetworkHealthSample.destroy({ where: { device_id: { [Op.in]: orphanIds } } }).catch(() => {});
-    }
-
-    const devices = rows.filter(r => r.device).map(r => {
-      const j = r.toJSON();
+    const devices = rows.map((d) => {
+      const j = d.toJSON();
+      const snap = j.health_snapshot || null;
+      const details = (snap && snap.details) || {};
       return {
-        id: j.device_id,
-        name: j.device ? j.device.name : (j.details && j.details.deviceName) || ('#' + j.device_id),
-        ip: j.device ? j.device.ip_address : (j.details && j.details.ip) || '',
-        type: j.device ? j.device.type : (j.details && j.details.deviceType) || 'other',
-        brand: j.device ? j.device.brand : null,
-        location: j.device ? j.device.location : null,
-        status: j.status,
-        reachable: !!j.reachable,
-        rttAvg: j.rtt_avg,
-        rttMin: j.rtt_min,
-        rttMax: j.rtt_max,
-        packetLoss: j.packet_loss,
-        cpu: j.cpu,
-        ram: j.ram,
-        disk: j.disk,
-        temperature: j.temperature,
-        voltage: j.voltage,
-        rxMbps: j.rx_mbps,
-        txMbps: j.tx_mbps,
-        ifaceErrors: j.iface_errors,
-        ifaceDrops: j.iface_drops,
-        ifaceDown: j.iface_down,
-        details: j.details || {},
-        alerts: j.alerts || [],
-        polledAt: j.polled_at,
+        id: j.id,
+        name: j.name,
+        ip: j.ip_address,
+        type: j.type,
+        brand: j.brand,
+        location: j.location,
+        pop: j.pop ? { id: j.pop.id, name: j.pop.name } : null,
+        apiReady: !!(j.api_username && String(j.api_username).trim()),
+        status: snap ? snap.status : 'unknown',
+        reachable: snap ? !!snap.reachable : false,
+        rttAvg: snap ? snap.rtt_avg : null,
+        rttMin: snap ? snap.rtt_min : null,
+        rttMax: snap ? snap.rtt_max : null,
+        packetLoss: snap ? snap.packet_loss : null,
+        cpu: snap ? snap.cpu : null,
+        ram: snap ? snap.ram : null,
+        disk: snap ? snap.disk : null,
+        temperature: snap ? snap.temperature : null,
+        voltage: snap ? snap.voltage : null,
+        rxMbps: snap ? snap.rx_mbps : null,
+        txMbps: snap ? snap.tx_mbps : null,
+        ifaceErrors: snap ? snap.iface_errors : 0,
+        ifaceDrops: snap ? snap.iface_drops : 0,
+        ifaceDown: snap ? snap.iface_down : 0,
+        details,
+        alerts: (snap && snap.alerts) || [],
+        polledAt: snap ? snap.polled_at : null,
       };
     });
 
@@ -160,9 +163,10 @@ exports.history = async (req, res) => {
 
 function emptySummary() {
   return {
-    total: 0, online: 0, offline: 0, warning: 0,
+    total: 0, online: 0, offline: 0, warning: 0, unknown: 0,
     avgRtt: null, maxLoss: 0, cpuHot: 0, opticalWeak: 0,
-    bgpDown: 0, errorPorts: 0,
+    bgpDown: 0, bgpUp: 0, bgpTotal: 0, errorPorts: 0,
+    rxMbps: 0, txMbps: 0,
   };
 }
 
@@ -174,18 +178,24 @@ function buildSummary(devices, services) {
     if (d.status === 'offline') s.offline += 1;
     else if (d.status === 'warning') s.warning += 1;
     else if (d.status === 'online') s.online += 1;
+    else s.unknown += 1;
     if (d.rttAvg != null) { rttSum += d.rttAvg; rttN += 1; }
     if (d.packetLoss != null && d.packetLoss > s.maxLoss) s.maxLoss = d.packetLoss;
     if (d.cpu != null && d.cpu >= 85) s.cpuHot += 1;
     if ((d.ifaceErrors || 0) > 0) s.errorPorts += 1;
-    (d.details && d.details.bgp || []).forEach(p => {
-      if (p.state && String(p.state).toLowerCase() !== 'established') s.bgpDown += 1;
-    });
+    s.rxMbps += Number(d.rxMbps) || 0;
+    s.txMbps += Number(d.txMbps) || 0;
+    const bgp = bgpSummary((d.details && d.details.bgp) || []);
+    s.bgpDown += bgp.down;
+    s.bgpUp += bgp.up;
+    s.bgpTotal += bgp.total;
     (d.details && d.details.sfp || []).forEach(f => {
       if (f.rxPower != null && f.rxPower <= -27) s.opticalWeak += 1;
     });
   });
   s.avgRtt = rttN ? Math.round((rttSum / rttN) * 10) / 10 : null;
+  s.rxMbps = parseFloat(s.rxMbps.toFixed(2));
+  s.txMbps = parseFloat(s.txMbps.toFixed(2));
   if (services && services.optical) s.opticalWeak += services.optical.weak || 0;
   return s;
 }

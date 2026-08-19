@@ -71,6 +71,8 @@
     .nh-tier li span.warn { color:var(--nh-warn); font-weight:700; }
     .nh-tier li span.crit { color:var(--nh-crit); font-weight:700; }
     .nh-tier li span.mute { color:var(--nh-muted); }
+    .mute { color:var(--nh-muted); }
+    .nh-tier-note { font-size:11px; color:var(--nh-muted); line-height:1.45; margin:0 0 8px; }
 
     .nh-card { background:var(--nh-card); border:1px solid var(--nh-border); border-radius:12px; margin-bottom:14px; overflow:hidden; }
     .nh-card-h { padding:12px 16px; border-bottom:1px solid var(--nh-border); display:flex; justify-content:space-between; align-items:center; }
@@ -171,6 +173,7 @@
           <div class="nh-tiers">
             <div class="nh-tier">
               <h3><span class="nh-badge t1">Tier 1</span> Kritis &amp; wajib</h3>
+              <p class="nh-tier-note">Status perangkat infrastruktur, latensi, packet loss, dan traffic uplink/downlink.</p>
               <ul>
                 <li>Latensi / RTT <span id="t1rtt" class="mute">—</span></li>
                 <li>Packet loss <span id="t1loss" class="mute">—</span></li>
@@ -180,6 +183,7 @@
             </div>
             <div class="nh-tier">
               <h3><span class="nh-badge t2">Tier 2</span> Kesehatan perangkat</h3>
+              <p class="nh-tier-note">Kondisi hardware: CPU, suhu/tegangan, optik SFP/ONT, dan sinyal wireless. Bukan traffic pelanggan.</p>
               <ul>
                 <li>CPU panas (≥85%) <span id="t2cpu" class="mute">—</span></li>
                 <li>Suhu / tegangan <span id="t2temp" class="mute">—</span></li>
@@ -189,8 +193,9 @@
             </div>
             <div class="nh-tier">
               <h3><span class="nh-badge t3">Tier 3</span> Protokol &amp; port</h3>
+              <p class="nh-tier-note">Sesi BGP/OSPF, error port, DNS/RADIUS, dan snapshot connection-tracking.</p>
               <ul>
-                <li>BGP tidak established <span id="t3bgp" class="mute">—</span></li>
+                <li>BGP <span id="t3bgp" class="mute">—</span></li>
                 <li>Port error / drop <span id="t3err" class="mute">—</span></li>
                 <li>DNS / RADIUS <span id="t3svc" class="mute">—</span></li>
                 <li>Flow lite (conntrack) <span id="t3flow" class="mute">—</span></li>
@@ -207,12 +212,12 @@
               <table class="nh-tbl" id="nhTable">
                 <thead>
                   <tr>
-                    <th>Perangkat</th><th>Status</th><th>RTT</th><th>Loss</th>
+                    <th>Perangkat</th><th>POP</th><th>Status</th><th>RTT</th><th>Loss</th>
                     <th>CPU</th><th>RAM</th><th>Suhu</th><th>RX / TX</th><th>Error</th><th>Alert</th>
                   </tr>
                 </thead>
                 <tbody id="nhTbody">
-                  <tr><td colspan="10" style="padding:24px;text-align:center;color:var(--nh-muted)">Memuat…</td></tr>
+                  <tr><td colspan="11" style="padding:24px;text-align:center;color:var(--nh-muted)">Memuat…</td></tr>
                 </tbody>
               </table>
             </div>
@@ -275,8 +280,10 @@ const NH = {
       });
       if (!r || !r.success) { alert((r && r.message) || 'Gagal mengubah status'); return; }
       this.setSwitch(r.data.enabled);
-      if (r.data.enabled) this.load();
-      else this.stop();
+      if (r.data.enabled) {
+        await this.load();
+        this.pollNow();
+      } else this.stop();
     } finally { this.saving = false; }
   },
 
@@ -326,8 +333,8 @@ const NH = {
 
     const st = d.status || {};
     document.getElementById('nhMeta').textContent = st.lastRunAt
-      ? ('Terakhir poll ' + new Date(st.lastRunAt).toLocaleTimeString('id-ID') + ' · ' + (st.lastDurationMs || 0) + ' ms · ' + (st.devicesPolled || 0) + ' device')
-      : 'Belum ada data — klik Poll sekarang';
+      ? ('Terakhir poll ' + new Date(st.lastRunAt).toLocaleTimeString('id-ID') + ' · ' + (st.lastDurationMs || 0) + ' ms · ' + (st.devicesPolled || 0) + ' device' + (st.lastError ? ' · error: ' + st.lastError : ''))
+      : 'Belum ada hasil poll — klik Poll sekarang (daftar device sudah diambil dari Device Management)';
 
     const set = (id, text, cls) => {
       const el = document.getElementById(id);
@@ -336,17 +343,16 @@ const NH = {
     };
     set('t1rtt', s.avgRtt == null ? 'belum ada' : s.avgRtt + ' ms', s.avgRtt != null && s.avgRtt > 20 ? 'warn' : 'ok');
     set('t1loss', (s.maxLoss || 0) + '%', s.maxLoss >= 5 ? 'crit' : (s.maxLoss >= 2 ? 'warn' : 'ok'));
-    set('t1up', (s.online||0) + ' up / ' + (s.offline||0) + ' down', s.offline ? 'crit' : 'ok');
-    const rx = (d.devices||[]).reduce((a,x)=>a+(x.rxMbps||0),0);
-    const tx = (d.devices||[]).reduce((a,x)=>a+(x.txMbps||0),0);
-    set('t1tr', this.fmtMbps(rx) + ' / ' + this.fmtMbps(tx) + ' Mbps', 'ok');
+    set('t1up', (s.online||0) + ' up / ' + (s.offline||0) + ' down' + (s.unknown ? (' / ' + s.unknown + ' menunggu poll') : ''), s.offline ? 'crit' : (s.total ? 'ok' : 'mute'));
+    set('t1tr', this.fmtMbps(s.rxMbps) + ' / ' + this.fmtMbps(s.txMbps) + ' Mbps', (s.rxMbps || s.txMbps) ? 'ok' : 'mute');
     set('t2cpu', (s.cpuHot||0) + ' perangkat', s.cpuHot ? 'warn' : 'ok');
     const temps = (d.devices||[]).filter(x => x.temperature != null);
     set('t2temp', temps.length ? temps.map(x => x.temperature + '°').join(', ') : 'n/a', 'mute');
     set('t2opt', (s.opticalWeak||0) + ' lemah', s.opticalWeak ? 'warn' : 'ok');
     const wifiN = (d.devices||[]).reduce((a,x)=>a+((x.details&&x.details.wireless)||[]).length,0);
     set('t2wifi', wifiN + ' klien', 'ok');
-    set('t3bgp', (s.bgpDown||0) + ' sesi', s.bgpDown ? 'crit' : 'ok');
+    if (!s.bgpTotal) set('t3bgp', 'tidak ada sesi', 'mute');
+    else set('t3bgp', (s.bgpUp||0) + ' established / ' + (s.bgpDown||0) + ' down', s.bgpDown ? 'crit' : 'ok');
     set('t3err', (s.errorPorts||0) + ' port', s.errorPorts ? 'warn' : 'ok');
 
     const svc = d.services || {};
@@ -382,20 +388,28 @@ const NH = {
     const rows = d.devices || [];
     const tb = document.getElementById('nhTbody');
     if (!rows.length) {
-      tb.innerHTML = '<tr><td colspan="10" style="padding:24px;text-align:center;color:var(--nh-muted)">Belum ada hasil poll. Pastikan ada device aktif di Device Management, lalu klik Poll sekarang.</td></tr>';
+      tb.innerHTML = '<tr><td colspan="11" style="padding:24px;text-align:center;color:var(--nh-muted)">Belum ada perangkat infrastruktur aktif (router / switch / OLT / AP / server) di Device Management. Assign device ke POP di halaman Devices bila ingin terkait peta infrastruktur.</td></tr>';
       return;
     }
     tb.innerHTML = rows.map(r => {
       const al = (r.alerts||[]).map(a => a.msg).join(' · ');
+      const apiHint = r.apiReady ? '' : '<div style="color:#b45309;font-size:10px;font-weight:700;margin-top:2px">API username belum diisi — traffic/CPU/BGP tidak terbaca</div>';
+      const errHint = (r.details && r.details.apiError) ? '<div style="color:#dc2626;font-size:10px;margin-top:2px">' + this.esc(r.details.apiError) + '</div>' : '';
+      const bgpN = ((r.details && r.details.bgp) || []).length;
+      const bgpHint = bgpN ? (' · BGP ' + bgpN) : '';
+      const bgpNote = (!bgpN && r.type === 'router' && r.details && r.details.bgpNote)
+        ? '<div style="color:#64748b;font-size:10px;margin-top:2px">' + this.esc(r.details.bgpNote) + '</div>' : '';
+      const ifaces = ((r.details && r.details.trafficIfaces) || []).join(', ');
       return '<tr>'
-        + '<td><b>' + this.esc(r.name||'') + '</b><div class="mono" style="color:var(--nh-muted)">' + this.esc(r.ip||'') + ' · ' + this.esc(r.type||'') + '</div></td>'
+        + '<td><b>' + this.esc(r.name||'') + '</b><div class="mono" style="color:var(--nh-muted)">' + this.esc(r.ip||'') + ' · ' + this.esc(r.type||'') + bgpHint + '</div>' + apiHint + errHint + bgpNote + '</td>'
+        + '<td>' + (r.pop && r.pop.name ? this.esc(r.pop.name) : '<span class="mute">—</span>') + '</td>'
         + '<td><span class="st ' + this.esc(r.status||'unknown') + '">' + this.esc(r.status||'unknown') + '</span></td>'
         + '<td class="mono">' + this.fmtMs(r.rttAvg) + '</td>'
         + '<td class="mono">' + (r.packetLoss == null ? '—' : r.packetLoss + '%') + '</td>'
         + '<td class="mono">' + this.fmtPct(r.cpu) + '</td>'
         + '<td class="mono">' + this.fmtPct(r.ram) + '</td>'
         + '<td class="mono">' + (r.temperature == null ? '—' : r.temperature + '°C') + '</td>'
-        + '<td class="mono">' + this.fmtMbps(r.rxMbps) + ' / ' + this.fmtMbps(r.txMbps) + '</td>'
+        + '<td class="mono">' + this.fmtMbps(r.rxMbps) + ' / ' + this.fmtMbps(r.txMbps) + (ifaces ? '<div style="color:var(--nh-muted);font-size:10px">' + this.esc(ifaces) + '</div>' : '') + '</td>'
         + '<td class="mono">' + ((r.ifaceErrors||0) + (r.ifaceDrops||0)) + '</td>'
         + '<td class="alerts">' + this.esc(al || '—') + '</td>'
         + '</tr>';

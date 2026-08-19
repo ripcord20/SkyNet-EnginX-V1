@@ -376,6 +376,8 @@ NetworkHealthSnapshot.belongsTo(Device, { foreignKey: 'device_id', as: 'device',
 Device.hasOne(NetworkHealthSnapshot, { foreignKey: 'device_id', as: 'health_snapshot', onDelete: 'CASCADE' });
 NetworkHealthSample.belongsTo(Device, { foreignKey: 'device_id', as: 'device', onDelete: 'CASCADE' });
 Device.hasMany(NetworkHealthSample, { foreignKey: 'device_id', as: 'health_samples', onDelete: 'CASCADE' });
+Device.belongsTo(InfrastructurePoint, { foreignKey: 'pop_id', as: 'pop' });
+InfrastructurePoint.hasMany(Device, { foreignKey: 'pop_id', as: 'devices' });
 User.hasMany(NocMonitorPreset,     { foreignKey: 'user_id',   as: 'noc_monitor_presets' });
 
 // ── Sales module associations ─────────────────────────────────
