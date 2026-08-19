@@ -17,6 +17,7 @@ assert.strictEqual(canPollMikrotik({ type: 'router', api_username: 'admin' }), t
 assert.strictEqual(canPollMikrotik({ type: 'switch', api_username: 'admin' }), true);
 assert.strictEqual(canPollMikrotik({ type: 'router', api_port: 80 }), false);
 assert.strictEqual(canPollMikrotik({ type: 'ont', api_username: 'admin' }), false);
+assert.strictEqual(canPollMikrotik({ type: 'router', api_username: 'admin', monitoring_type: 'snmp' }), false);
 
 const ifaces = normalizeIfaces([
   { name: 'ether1', type: 'ether', running: true, disabled: false, comment: 'WAN uplink', 'rx-byte': '1000' },

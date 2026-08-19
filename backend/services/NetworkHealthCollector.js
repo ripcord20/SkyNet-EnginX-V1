@@ -464,6 +464,7 @@ function applyTrafficDelta(extra, metrics, prev) {
 
 async function pollDevice(device, cfg, prev) {
   const ping = await icmpProbe(device.ip_address);
+  const mon = device.monitoring_type || 'snmp';
   let extra = { protocol: 'icmp' };
   let metrics = {
     cpu: null, ram: null, disk: null, temperature: null, voltage: null,
@@ -486,8 +487,8 @@ async function pollDevice(device, cfg, prev) {
     } else {
       extra.apiError = api.error;
     }
-  } else {
-    extra.apiError = 'Isi API Username di Device Management agar traffic/CPU/PPPoE terbaca (SNMP saja tidak cukup)';
+  } else if (mon === 'api' || mon === 'both') {
+    extra.apiError = 'Isi API Username di Device Management agar traffic/CPU/PPPoE terbaca';
   }
 
   const alerts = buildAlerts(device, ping, metrics, extra);

@@ -748,7 +748,7 @@
             <option value="api">API saja (MikroTik)</option>
             <option value="both">SNMP + API</option>
           </select>
-          <div class="field-hint">Pilih <strong>API</strong> atau <strong>SNMP + API</strong> untuk menu Traffic &amp; NMS (wajib isi username + password REST). SNMP Community saja cukup untuk ping/CPU di Kesehatan Jaringan, tapi Traffic/NMS akan kosong.</div>
+          <div class="field-hint" id="devMonHint">SNMP saja: cukup <strong>IP + community</strong>. Username/password API tidak perlu. Pilih <strong>API</strong> atau <strong>SNMP + API</strong> hanya jika ingin menu Traffic &amp; NMS.</div>
         </div>
 
         <!-- SNMP fields -->
@@ -788,7 +788,7 @@
           </div>
           <div class="form-grid">
             <div class="field">
-              <label class="field-label">API Username</label>
+              <label class="field-label">API Username <span class="req" id="devApiUserReq" style="display:none">*</span></label>
               <input type="text" id="devApiUser" placeholder="admin">
             </div>
             <div class="field">
@@ -1168,7 +1168,7 @@
     document.getElementById('devApiUser').value = '';
     document.getElementById('devApiPass').value = '';
     document.getElementById('devApiPort').value = '80';
-    document.getElementById('devApiProtocol').value = 'rest-http';
+    document.getElementById('devApiProtocol').value = 'rest';
     document.getElementById('devNotes').value = '';
     hideTestResult();
     onMonTypeChange();
@@ -1250,6 +1250,9 @@
     const apiWrap  = document.getElementById('apiFields');
     snmpWrap.classList.toggle('cond-hide', v === 'api');
     apiWrap.classList.toggle('cond-hide', v === 'snmp');
+    const needApi = v === 'api' || v === 'both';
+    const star = document.getElementById('devApiUserReq');
+    if (star) star.style.display = needApi ? 'inline' : 'none';
   }
 
   // ── Protokol API ↔ Port mapping ──
@@ -1303,6 +1306,9 @@
     if (!data.name || !data.ip_address) {
       return App.showToast('Nama dan IP wajib diisi', 'error');
     }
+    if ((data.monitoring_type === 'api' || data.monitoring_type === 'both') && !data.api_username) {
+      return App.showToast('API Username wajib diisi untuk metode API / SNMP+API', 'error');
+    }
 
     const id = document.getElementById('devId').value;
     const endpoint = id ? `/devices/${id}` : '/devices';
@@ -1339,14 +1345,15 @@
     // protocol + port di sini.
     const uiProto = document.getElementById('devApiProtocol').value || 'rest';
     const apiPort = parseInt(document.getElementById('devApiPort').value) || null;
-    return {
+    const mon = document.getElementById('devMonType').value || 'snmp';
+    const payload = {
       name:            document.getElementById('devName').value.trim(),
       ip_address:      document.getElementById('devIp').value.trim(),
       type:            document.getElementById('devType').value,
       brand:           document.getElementById('devBrand').value.trim() || null,
       model:           document.getElementById('devModel').value.trim() || null,
       location:        document.getElementById('devLocation').value.trim() || null,
-      monitoring_type: document.getElementById('devMonType').value,
+      monitoring_type: mon,
       snmp_community:  document.getElementById('devSnmpCommunity').value.trim() || 'public',
       snmp_version:    parseInt(document.getElementById('devSnmpVersion').value) || 2,
       snmp_port:       parseInt(document.getElementById('devSnmpPort').value) || 161,
@@ -1357,6 +1364,13 @@
       notes:           document.getElementById('devNotes').value.trim() || null,
       pop_id:          parseInt(document.getElementById('devPopId').value) || null
     };
+    if (mon === 'snmp') {
+      payload.api_username = null;
+      payload.api_password = null;
+      payload.api_port = null;
+      payload.api_protocol = null;
+    }
+    return payload;
   }
 
   // ── Test connection from modal (not yet saved) ──
