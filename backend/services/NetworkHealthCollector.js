@@ -101,7 +101,14 @@ async function setConfig(partial = {}) {
       const n = parseInt(val, 10);
       val = String([60, 120, 300].includes(n) ? n : 60);
     }
-    await AppSetting.upsert({ key: settingKey, value: String(val), type: 'string' });
+    const str = String(val);
+    const updated = await AppSetting.update(
+      { value: str, type: 'string' },
+      { where: { key: settingKey } }
+    );
+    if (!updated[0]) {
+      await AppSetting.create({ key: settingKey, value: str, type: 'string', description: 'Network Health' });
+    }
   }
   const cfg = await getConfig();
   try { await require('./CronService').rescheduleNetworkHealth(); } catch (_) {}

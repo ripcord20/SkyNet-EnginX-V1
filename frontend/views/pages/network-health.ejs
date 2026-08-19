@@ -29,7 +29,8 @@
     .nh-hdr p { font-size:12px; color:var(--nh-muted); margin:0; }
     .nh-hdr-r { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 
-    .nh-switch { display:flex; align-items:center; gap:10px; padding:6px 8px 6px 14px; border:1.5px solid var(--nh-border); border-radius:999px; background:var(--nh-panel); }
+    .nh-switch { display:flex; align-items:center; gap:10px; padding:6px 8px 6px 14px; border:1.5px solid var(--nh-border); border-radius:999px; background:var(--nh-panel); cursor:pointer; user-select:none; }
+    .nh-switch.busy { opacity:.7; pointer-events:none; }
     .nh-switch span.lbl { font-size:12px; font-weight:800; letter-spacing:.3px; }
     .nh-switch.off span.lbl { color:var(--nh-muted); }
     .nh-switch.on span.lbl { color:var(--nh-ok); }
@@ -145,7 +146,7 @@
             <button class="nh-btn" id="nhPollBtn" onclick="NH.pollNow()" disabled>Poll sekarang</button>
             <div class="nh-switch off" id="nhSwitch">
               <span class="lbl">Status</span>
-              <button type="button" class="nh-tog" id="nhTog" onclick="NH.toggle()" aria-label="Toggle Network Health"></button>
+              <button type="button" class="nh-tog" id="nhTog" aria-pressed="false" aria-label="Toggle Network Health"></button>
               <span class="nh-tog-txt" id="nhTogTxt">OFF</span>
             </div>
           </div>
@@ -260,32 +261,58 @@ const NH = {
     return res.json();
   },
 
+  toast(msg, type) {
+    if (window.App && App.showToast) App.showToast(msg, type || 'info');
+    else alert(msg);
+  },
+
   setSwitch(on) {
     this.enabled = !!on;
     const wrap = document.getElementById('nhSwitch');
+    if (!wrap) return;
     wrap.classList.toggle('on', this.enabled);
     wrap.classList.toggle('off', !this.enabled);
-    document.getElementById('nhTogTxt').textContent = this.enabled ? 'ON' : 'OFF';
-    document.getElementById('nhOff').style.display = this.enabled ? 'none' : '';
-    document.getElementById('nhOn').style.display = this.enabled ? '' : 'none';
-    document.getElementById('nhPollBtn').disabled = !this.enabled;
+    wrap.classList.toggle('busy', !!this.saving);
+    const txt = document.getElementById('nhTogTxt');
+    if (txt) txt.textContent = this.enabled ? 'ON' : 'OFF';
+    const tog = document.getElementById('nhTog');
+    if (tog) tog.setAttribute('aria-pressed', this.enabled ? 'true' : 'false');
+    const off = document.getElementById('nhOff');
+    const onBox = document.getElementById('nhOn');
+    if (off) off.style.display = this.enabled ? 'none' : '';
+    if (onBox) onBox.style.display = this.enabled ? '' : 'none';
+    const pollBtn = document.getElementById('nhPollBtn');
+    if (pollBtn) pollBtn.disabled = !this.enabled;
   },
 
   async toggle() {
     if (this.saving) return;
     this.saving = true;
+    this.setSwitch(this.enabled);
+    const next = !this.enabled;
     try {
       const r = await this.api('/network-health/config', {
         method: 'POST',
-        body: JSON.stringify({ enabled: !this.enabled }),
+        body: JSON.stringify({ enabled: next }),
       });
-      if (!r || !r.success) { alert((r && r.message) || 'Gagal mengubah status'); return; }
-      this.setSwitch(r.data.enabled);
-      if (r.data.enabled) {
+      if (!r || !r.success) {
+        this.toast((r && r.message) || 'Gagal mengubah status monitor', 'error');
+        return;
+      }
+      const on = !!(r.data && r.data.enabled);
+      this.setSwitch(on);
+      this.toast(r.message || (on ? 'Monitor dinyalakan' : 'Monitor dimatikan'), on ? 'success' : 'info');
+      if (on) {
+        this.start();
         await this.load();
-        this.pollNow();
+        await this.pollNow();
       } else this.stop();
-    } finally { this.saving = false; }
+    } catch (e) {
+      this.toast((e && e.message) || 'Gagal mengubah status monitor', 'error');
+    } finally {
+      this.saving = false;
+      this.setSwitch(this.enabled);
+    }
   },
 
   async saveMeta() {
@@ -339,6 +366,7 @@ const NH = {
 
     const set = (id, text, cls) => {
       const el = document.getElementById(id);
+      if (!el) return;
       el.textContent = text;
       el.className = cls || 'mute';
     };
@@ -396,28 +424,31 @@ const NH = {
       return;
     }
     try {
-    tb.innerHTML = rows.map(r => {
-      const alerts = Array.isArray(r.alerts) ? r.alerts : [];
-      const al = alerts.map(a => (a && a.msg) || '').filter(Boolean).join(' · ');
-      const apiHint = r.apiReady ? '' : '<div style="color:#b45309;font-size:10px;font-weight:700;margin-top:2px">API username belum diisi — traffic/CPU/PPPoE tidak terbaca</div>';
-      const errHint = (r.details && r.details.apiError) ? '<div style="color:#dc2626;font-size:10px;margin-top:2px">' + this.esc(r.details.apiError) + '</div>' : '';
-      const pppoeN = Number(r.details && r.details.pppoe && r.details.pppoe.active) || 0;
-      const pppoeHint = pppoeN ? (' · PPPoE ' + pppoeN + ' sesi') : '';
-      const ifaces = ((r.details && r.details.trafficIfaces) || []).join(', ');
-      return '<tr>'
-        + '<td><b>' + this.esc(r.name||'') + '</b><div class="mono" style="color:var(--nh-muted)">' + this.esc(r.ip||'') + ' · ' + this.esc(r.type||'') + pppoeHint + '</div>' + apiHint + errHint + '</td>'
-        + '<td>' + (r.pop && r.pop.name ? this.esc(r.pop.name) : '<span class="mute">—</span>') + '</td>'
-        + '<td><span class="st ' + this.esc(r.status||'unknown') + '">' + this.esc(r.status||'unknown') + '</span></td>'
-        + '<td class="mono">' + this.fmtMs(r.rttAvg) + '</td>'
-        + '<td class="mono">' + (r.packetLoss == null ? '—' : r.packetLoss + '%') + '</td>'
-        + '<td class="mono">' + this.fmtPct(r.cpu) + '</td>'
-        + '<td class="mono">' + this.fmtPct(r.ram) + '</td>'
-        + '<td class="mono">' + (r.temperature == null ? '—' : r.temperature + '°C') + '</td>'
-        + '<td class="mono">' + this.fmtMbps(r.rxMbps) + ' / ' + this.fmtMbps(r.txMbps) + (ifaces ? '<div style="color:var(--nh-muted);font-size:10px">' + this.esc(ifaces) + '</div>' : '') + '</td>'
-        + '<td class="mono">' + ((r.ifaceErrors||0) + (r.ifaceDrops||0)) + '</td>'
-        + '<td class="alerts">' + this.esc(al || '—') + '</td>'
-        + '</tr>';
-    }).join('');
+      tb.innerHTML = rows.map(r => {
+        const alerts = Array.isArray(r.alerts) ? r.alerts : [];
+        const al = alerts.map(a => (a && a.msg) || '').filter(Boolean).join(' · ');
+        const apiHint = r.apiReady ? '' : '<div style="color:#b45309;font-size:10px;font-weight:700;margin-top:2px">API username belum diisi — traffic/CPU/PPPoE tidak terbaca</div>';
+        const errHint = (r.details && r.details.apiError) ? '<div style="color:#dc2626;font-size:10px;margin-top:2px">' + this.esc(r.details.apiError) + '</div>' : '';
+        const pppoeN = Number(r.details && r.details.pppoe && r.details.pppoe.active) || 0;
+        const pppoeHint = pppoeN ? (' · PPPoE ' + pppoeN + ' sesi') : '';
+        const ifaces = ((r.details && r.details.trafficIfaces) || []).join(', ');
+        return '<tr>'
+          + '<td><b>' + this.esc(r.name||'') + '</b><div class="mono" style="color:var(--nh-muted)">' + this.esc(r.ip||'') + ' · ' + this.esc(r.type||'') + pppoeHint + '</div>' + apiHint + errHint + '</td>'
+          + '<td>' + (r.pop && r.pop.name ? this.esc(r.pop.name) : '<span class="mute">—</span>') + '</td>'
+          + '<td><span class="st ' + this.esc(r.status||'unknown') + '">' + this.esc(r.status||'unknown') + '</span></td>'
+          + '<td class="mono">' + this.fmtMs(r.rttAvg) + '</td>'
+          + '<td class="mono">' + (r.packetLoss == null ? '—' : r.packetLoss + '%') + '</td>'
+          + '<td class="mono">' + this.fmtPct(r.cpu) + '</td>'
+          + '<td class="mono">' + this.fmtPct(r.ram) + '</td>'
+          + '<td class="mono">' + (r.temperature == null ? '—' : r.temperature + '°C') + '</td>'
+          + '<td class="mono">' + this.fmtMbps(r.rxMbps) + ' / ' + this.fmtMbps(r.txMbps) + (ifaces ? '<div style="color:var(--nh-muted);font-size:10px">' + this.esc(ifaces) + '</div>' : '') + '</td>'
+          + '<td class="mono">' + ((r.ifaceErrors||0) + (r.ifaceDrops||0)) + '</td>'
+          + '<td class="alerts">' + this.esc(al || '—') + '</td>'
+          + '</tr>';
+      }).join('');
+    } catch (e) {
+      tb.innerHTML = '<tr><td colspan="11" style="padding:24px;text-align:center;color:var(--nh-crit)">Gagal menampilkan perangkat: ' + this.esc(e.message) + '</td></tr>';
+    }
   },
 
   async load() {
@@ -441,9 +472,15 @@ const NH = {
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
+  const sw = document.getElementById('nhSwitch');
+  if (sw) sw.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    NH.toggle();
+  });
   await NH.load();
   NH.start();
 });
+window.NH = NH;
 </script>
 </body>
 </html>
