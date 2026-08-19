@@ -6,7 +6,7 @@
 const axios = require('axios');
 const logger = require('../utils/logger');
 const { MikrotikApiClient } = require('./MikrotikApiClient');
-const { parseResource, unwrapRestData, unwrapSingleton } = require('../utils/mikrotikResource');
+const { parseResource, unwrapRestData, unwrapSingleton, mapInterfaceRow } = require('../utils/mikrotikResource');
 
 /**
  * Port → protokol detection (FALLBACK MODE — dipakai kalau caller tidak
@@ -700,14 +700,7 @@ class MikrotikService {
   // ── INTERFACES ─────────────────────────────────────────────
   async getInterfaces() {
     const ifaces = await this.get('/interface');
-    return (Array.isArray(ifaces) ? ifaces : []).map(i => ({
-      id: i['.id'], name: i.name, type: i.type || 'ether',
-      mtu: i.mtu || 1500, running: i.running === 'true',
-      disabled: i.disabled === 'true', comment: i.comment || '',
-      macAddress: i['mac-address'] || '',
-      txByte: parseInt(i['tx-byte']) || 0, rxByte: parseInt(i['rx-byte']) || 0,
-      txPacket: parseInt(i['tx-packet']) || 0, rxPacket: parseInt(i['rx-packet']) || 0
-    }));
+    return (Array.isArray(ifaces) ? ifaces : []).map(mapInterfaceRow);
   }
 
   // ── IP SCAN (Tools > IP Scan) ──────────────────────────────

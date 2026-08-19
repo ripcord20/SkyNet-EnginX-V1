@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { User, Role, Permission } = require('../models');
+const { loadAuthUser, invalidateAuthUserCache } = require('../utils/authUserCache');
 
 // Bangun URL redirect ke /login sambil menyimpan tujuan awal (?next=...).
 // Hanya path internal yang aman (diawali '/', bukan '//' atau 'http') yang
@@ -48,18 +48,7 @@ const authenticate = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
-    const user = await User.findByPk(decoded.id, {
-      include: [{
-        model: Role,
-        as: 'role',
-        include: [{
-          model: Permission,
-          as: 'permissions',
-          through: { attributes: [] }
-        }]
-      }]
-    });
+    const user = await loadAuthUser(decoded.id);
 
     if (!user || !user.is_active) {
       const isApiRequest = req.xhr
@@ -139,9 +128,7 @@ const optionalAuth = async (req, res, next) => {
     let token = req.cookies?.token || req.headers.authorization?.substring(7);
     if (token) {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const user = await User.findByPk(decoded.id, {
-        include: [{ model: Role, as: 'role' }]
-      });
+      const user = await loadAuthUser(decoded.id);
       if (user && user.is_active) {
         req.user = user;
       }
@@ -152,4 +139,4 @@ const optionalAuth = async (req, res, next) => {
   next();
 };
 
-module.exports = { authenticate, authorize, hasPermission, optionalAuth };
+module.exports = { authenticate, authorize, hasPermission, optionalAuth, invalidateAuthUserCache };

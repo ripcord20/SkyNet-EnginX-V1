@@ -62,18 +62,33 @@ const TrafficPage = {
   },
 
   async loadInterfaces() {
-    const data = await App.api(_withDev('/mikrotik/interfaces'));
-    if (data?.success) {
-      this.interfaces = data.data;
-      this.renderCards();
-      this.updateSummary();
-      document.getElementById('ifaceCount').textContent = `${this.interfaces.length} interface`;
-    } else {
-      document.getElementById('ifaceGrid').innerHTML =
-        `<div class="loading-state" style="color:#dc2626;">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-          <br>${data?.message || 'Gagal memuat interface'}
-        </div>`;
+    const grid = document.getElementById('ifaceGrid');
+    try {
+      const data = await App.api(_withDev('/mikrotik/interfaces'));
+      if (data?.success) {
+        this.interfaces = Array.isArray(data.data) ? data.data : [];
+        this.renderCards();
+        this.updateSummary();
+        const cnt = document.getElementById('ifaceCount');
+        if (cnt) cnt.textContent = `${this.interfaces.length} interface`;
+      } else {
+        const msg = data?.message || 'Gagal memuat interface';
+        const hint = /auth|password|401|unauthorized|login|econnrefused|timeout/i.test(String(msg))
+          ? ' Isi API Username + Password di Device Management. Menu Traffic butuh REST/API, bukan SNMP Community saja.'
+          : '';
+        if (grid) {
+          grid.innerHTML =
+            `<div class="loading-state" style="color:#dc2626;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+              <br>${esc(msg)}${hint}
+            </div>`;
+        }
+      }
+    } catch (err) {
+      if (grid) {
+        grid.innerHTML =
+          `<div class="loading-state" style="color:#dc2626;">Gagal memuat interface: ${esc(err.message || err)}</div>`;
+      }
     }
   },
 
@@ -81,8 +96,9 @@ const TrafficPage = {
     const data = await App.api(_withDev('/mikrotik/interfaces/monitor'));
     if (!data?.success) return;
 
+    const stats = Array.isArray(data.data) ? data.data : [];
     const statsMap = {};
-    data.data.forEach(s => { statsMap[s.name] = s; });
+    stats.forEach(s => { statsMap[s.name] = s; });
 
     // Sinkronkan rx/tx rate ke objek interface, reset ke 0 jika tidak ada di statsMap
     this.interfaces.forEach(iface => {
@@ -97,7 +113,7 @@ const TrafficPage = {
     });
 
     this.updateCards(statsMap);
-    this.pushChartData(data.data);
+    this.pushChartData(stats);
     this.updateSummary();
   },
 
@@ -112,7 +128,7 @@ const TrafficPage = {
   renderCards() {
     const grid = document.getElementById('ifaceGrid');
     if (!this.interfaces.length) {
-      grid.innerHTML = `<div class="loading-state">Tidak ada interface ditemukan</div>`;
+      grid.innerHTML = `<div class="loading-state">Tidak ada interface ditemukan. Pastikan device MikroTik punya API Username &amp; Password di Device Management.</div>`;
       return;
     }
 
