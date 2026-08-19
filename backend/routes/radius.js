@@ -13,6 +13,8 @@ router.put('/settings',           logActivity('update', 'radius'), ctrl.saveSett
 router.get('/nas',                ctrl.listNas);
 router.post('/nas',               logActivity('create', 'radius_nas'), ctrl.createNas);
 router.post('/nas/sync-devices',  ctrl.syncNas);
+router.get('/nas/:id/script',     ctrl.getNasScript);
+router.get('/nas/:id',            ctrl.showNas);
 router.put('/nas/:id',            logActivity('update', 'radius_nas'), ctrl.updateNas);
 router.delete('/nas/:id',         logActivity('delete', 'radius_nas'), ctrl.deleteNas);
 

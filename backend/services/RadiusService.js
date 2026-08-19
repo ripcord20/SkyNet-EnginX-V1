@@ -12,6 +12,11 @@ const { sequelize, AppSetting, Customer, Package, Device } = require('../models'
 const { QueryTypes } = require('sequelize');
 const crypto = require('crypto');
 const logger = require('../utils/logger');
+const {
+  hydrateNas,
+  mergeProvision,
+  generateNasMikrotikScript,
+} = require('../utils/nasMikrotikScript');
 
 const SETTING_KEYS = {
   enabled:     'radius_enabled',
@@ -130,8 +135,34 @@ async function ensureSchema() {
   for (const sql of stmts) {
     await sequelize.query(sql);
   }
+  await ensureNasExtraColumns();
   _schemaReady = true;
   logger.info('[RADIUS] schema ready (FreeRADIUS MySQL tables)');
+}
+
+async function ensureNasExtraColumns() {
+  const cols = await sequelize.query(
+    `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nas'`,
+    { type: QueryTypes.SELECT }
+  );
+  const have = new Set((cols || []).map(c => c.COLUMN_NAME));
+  const alters = [];
+  if (!have.has('location')) {
+    alters.push("ADD COLUMN `location` varchar(128) DEFAULT NULL");
+  }
+  if (!have.has('provision')) {
+    alters.push("ADD COLUMN `provision` TEXT NULL");
+  }
+  if (!alters.length) return;
+  try {
+    await sequelize.query(`ALTER TABLE nas ${alters.join(', ')}`);
+    logger.info('[RADIUS] nas extra columns added: ' + alters.length);
+  } catch (e) {
+    if (!/duplicate column|already exists/i.test(e.message || '')) {
+      throw e;
+    }
+  }
 }
 
 async function getSetting(key, fallback) {
@@ -213,15 +244,69 @@ async function stats() {
 }
 
 // ── NAS ──────────────────────────────────────────────────────
-async function listNas() {
-  await ensureSchema();
-  return sequelize.query(`SELECT * FROM nas ORDER BY shortname ASC, nasname ASC`, { type: QueryTypes.SELECT });
+function randomHex(bytes) {
+  return crypto.randomBytes(bytes).toString('hex');
 }
 
-async function createNas({ nasname, shortname, type, secret, ports, description }) {
+async function fetchNasRow(id) {
+  const rows = await sequelize.query(`SELECT * FROM nas WHERE id=?`, {
+    replacements: [id], type: QueryTypes.SELECT
+  });
+  return rows[0] || null;
+}
+
+function scriptsForNas(nas) {
+  const base = { ...nas, now: new Date() };
+  const out = { v6: null, v7: null, error: null };
+  try {
+    out.v6 = generateNasMikrotikScript({ ...base, version: 'v6' });
+    out.v7 = generateNasMikrotikScript({ ...base, version: 'v7' });
+  } catch (e) {
+    out.error = e.message;
+  }
+  return out;
+}
+
+async function listNas() {
   await ensureSchema();
+  const rows = await sequelize.query(
+    `SELECT * FROM nas ORDER BY location ASC, shortname ASC, nasname ASC`,
+    { type: QueryTypes.SELECT }
+  );
+  return rows.map(hydrateNas);
+}
+
+async function getNas(id) {
+  await ensureSchema();
+  const row = await fetchNasRow(id);
+  if (!row) return null;
+  const nas = hydrateNas(row);
+  return { ...nas, scripts: scriptsForNas(nas) };
+}
+
+async function saveNasProvision(id, body, currentRow) {
+  const provision = mergeProvision(currentRow?.provision, body, { nasId: id });
+  if (!provision.vpn_username) {
+    provision.vpn_username = `skynetradius_${randomHex(7)}`;
+  }
+  if (!provision.vpn_password) {
+    provision.vpn_password = String(body.secret || currentRow?.secret || randomHex(4));
+  }
+  const location = body.location !== undefined
+    ? (String(body.location || '').trim().slice(0, 128) || null)
+    : (currentRow?.location || null);
+  await sequelize.query(
+    `UPDATE nas SET location=?, provision=? WHERE id=?`,
+    { replacements: [location, JSON.stringify(provision), id] }
+  );
+}
+
+async function createNas(body = {}) {
+  await ensureSchema();
+  const { nasname, shortname, type, secret, ports, description } = body;
   if (!nasname) throw new Error('IP/hostname NAS wajib diisi');
   const settings = await getSettings();
+  const nasSecret = (secret || settings.secret || randomHex(4)).toString().slice(0, 60);
   await sequelize.query(
     `INSERT INTO nas (nasname, shortname, type, secret, ports, description)
      VALUES (?, ?, ?, ?, ?, ?)`,
@@ -230,7 +315,7 @@ async function createNas({ nasname, shortname, type, secret, ports, description 
         String(nasname).trim(),
         (shortname || nasname).toString().slice(0, 32),
         type || settings.nas_type || 'mikrotik',
-        (secret || settings.secret || 'testing123').toString().slice(0, 60),
+        nasSecret,
         ports ? parseInt(ports) : null,
         description || 'MikroTik NAS'
       ]
@@ -240,16 +325,21 @@ async function createNas({ nasname, shortname, type, secret, ports, description 
     `SELECT * FROM nas WHERE nasname=? ORDER BY id DESC LIMIT 1`,
     { replacements: [String(nasname).trim()], type: QueryTypes.SELECT }
   );
-  return rows[0];
+  const created = rows[0];
+  if (!created) throw new Error('NAS gagal disimpan');
+  await saveNasProvision(created.id, {
+    ...body,
+    secret: nasSecret,
+    vpn_password: body.vpn_password || nasSecret,
+    vpn_username: body.vpn_username || `skynetradius_${randomHex(7)}`,
+  }, created);
+  return hydrateNas(await fetchNasRow(created.id));
 }
 
 async function updateNas(id, body = {}) {
   await ensureSchema();
-  const rows = await sequelize.query(`SELECT * FROM nas WHERE id=?`, {
-    replacements: [id], type: QueryTypes.SELECT
-  });
-  if (!rows[0]) throw new Error('NAS tidak ditemukan');
-  const cur = rows[0];
+  const cur = await fetchNasRow(id);
+  if (!cur) throw new Error('NAS tidak ditemukan');
   await sequelize.query(
     `UPDATE nas SET nasname=?, shortname=?, type=?, secret=?, ports=?, description=? WHERE id=?`,
     {
@@ -264,10 +354,8 @@ async function updateNas(id, body = {}) {
       ]
     }
   );
-  const updated = await sequelize.query(`SELECT * FROM nas WHERE id=?`, {
-    replacements: [id], type: QueryTypes.SELECT
-  });
-  return updated[0];
+  await saveNasProvision(id, body, cur);
+  return hydrateNas(await fetchNasRow(id));
 }
 
 async function deleteNas(id) {
@@ -281,7 +369,7 @@ async function syncNasFromDevices() {
   const settings = await getSettings();
   const routers = await Device.findAll({
     where: { type: 'router', is_active: true },
-    attributes: ['id', 'name', 'ip_address']
+    attributes: ['id', 'name', 'ip_address', 'location']
   });
   let created = 0, skipped = 0;
   for (const r of routers) {
@@ -295,7 +383,8 @@ async function syncNasFromDevices() {
       shortname: (r.name || r.ip_address).slice(0, 32),
       type: settings.nas_type || 'mikrotik',
       secret: settings.secret,
-      description: `Device #${r.id} ${r.name}`
+      description: `Device #${r.id} ${r.name}`,
+      location: r.location || null,
     });
     created++;
   }
@@ -661,6 +750,7 @@ module.exports = {
   saveSettings,
   stats,
   listNas,
+  getNas,
   createNas,
   updateNas,
   deleteNas,

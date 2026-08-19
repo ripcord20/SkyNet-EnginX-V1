@@ -11,7 +11,7 @@ function wrap(fn) {
       await fn(req, res);
     } catch (e) {
       logger.error('[RADIUS] ' + e.message);
-      const code = /tidak ditemukan|wajib diisi/i.test(e.message) ? 400 : 500;
+      const code = /tidak ditemukan|wajib diisi|tidak valid|hanya huruf/i.test(e.message) ? 400 : 500;
       res.status(code).json({ success: false, message: e.message });
     }
   };
@@ -35,6 +35,31 @@ exports.saveSettings = wrap(async (req, res) => {
 exports.listNas = wrap(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.json({ success: true, data: await Radius.listNas() });
+});
+
+exports.showNas = wrap(async (req, res) => {
+  const row = await Radius.getNas(req.params.id);
+  if (!row) return res.status(404).json({ success: false, message: 'NAS tidak ditemukan' });
+  res.set('Cache-Control', 'no-store');
+  res.json({ success: true, data: row });
+});
+
+exports.getNasScript = wrap(async (req, res) => {
+  const row = await Radius.getNas(req.params.id);
+  if (!row) return res.status(404).json({ success: false, message: 'NAS tidak ditemukan' });
+  const version = String(req.query.version || 'v6').toLowerCase() === 'v7' ? 'v7' : 'v6';
+  const script = row.scripts?.[version];
+  if (!script) {
+    return res.status(400).json({
+      success: false,
+      message: row.scripts?.error || 'Lengkapi data VPN, profile PPP, dan RADIUS untuk membuat script',
+    });
+  }
+  res.set('Cache-Control', 'no-store');
+  res.json({
+    success: true,
+    data: { version, script, title: version === 'v7' ? 'RouterOS v7 Script (Format redirect-to, tanpa PPTP)' : 'RouterOS v6 Script (Format redirect-to)' },
+  });
 });
 
 exports.createNas = wrap(async (req, res) => {
