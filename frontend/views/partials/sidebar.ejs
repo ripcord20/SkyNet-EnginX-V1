@@ -90,7 +90,7 @@
         <span>Kesehatan Jaringan</span>
       </a>
       <% const _nNet = ['nms','traffic','queue','ippool','firewall'].includes(active); %>
-      <% const _nAcc = ['pppoe','wireguard','nas','hotspot','reseller-voucher'].includes(active); %>
+      <% const _nAcc = ['pppoe','nas','hotspot','reseller-voucher'].includes(active); %>
       <% const _nDev = ['devices','device-monitor','ping','ping-monitor','olt-management','genieacs'].includes(active); %>
       <div class="nav-group open" data-nav-group="noc-net">
         <button type="button" class="nav-item nav-group-toggle <%= _nNet ? 'active' : '' %>" onclick="toggleNavGroup(this)">
@@ -113,7 +113,6 @@
         </button>
         <div class="nav-group-children">
           <a href="/monitoring/pppoe" class="nav-sub <%= active === 'pppoe' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>PPPoE</span><span class="nav-badge blue" id="pppoe-count" style="display:none">0</span></a>
-          <a href="/monitoring/wireguard" class="nav-sub <%= active === 'wireguard' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>WireGuard</span></a>
           <a href="/monitoring/nas" class="nav-sub <%= active === 'nas' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>NAS RADIUS</span></a>
           <a href="/monitoring/hotspot" class="nav-sub <%= active === 'hotspot' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>Hotspot</span></a>
           <a href="/reseller-voucher" class="nav-sub <%= active === 'reseller-voucher' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>Reseller Voucher</span></a>
@@ -401,7 +400,7 @@
         <span>Kesehatan Jaringan</span>
       </a>
       <% const _aNet = ['nms','traffic','queue','ippool','firewall'].includes(active); %>
-      <% const _aAcc = ['pppoe','wireguard','nas','hotspot','voucher-template'].includes(active); %>
+      <% const _aAcc = ['pppoe','nas','hotspot','voucher-template'].includes(active); %>
       <% const _aDev = ['devices','device-monitor','ping-monitor','ping','olt-management','genieacs'].includes(active); %>
       <div class="nav-group open" data-nav-group="adm-net">
         <button type="button" class="nav-item nav-group-toggle <%= _aNet ? 'active' : '' %>" onclick="toggleNavGroup(this)">
@@ -424,7 +423,6 @@
         </button>
         <div class="nav-group-children">
           <a href="/monitoring/pppoe" class="nav-sub <%= active === 'pppoe' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>PPPoE</span><span class="nav-badge blue" id="pppoe-count" style="display:none">0</span></a>
-          <a href="/monitoring/wireguard" class="nav-sub <%= active === 'wireguard' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>WireGuard</span></a>
           <a href="/monitoring/nas" class="nav-sub <%= active === 'nas' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>NAS RADIUS</span></a>
           <a href="/monitoring/hotspot" class="nav-sub <%= active === 'hotspot' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>Hotspot</span></a>
           <a href="/voucher-template" class="nav-sub <%= active === 'voucher-template' ? 'active' : '' %>"><span class="nav-sub-dot"></span><span>Template Voucher</span></a>
@@ -709,6 +707,12 @@
 
 /* ── Nav dropdown group ── */
 .nav-group{margin:0;}
+.nav-item.nav-pending, .nav-sub.nav-pending { opacity:.7; }
+#navProgress{
+  position:fixed;top:0;left:0;height:3px;width:0;z-index:99999;
+  background:linear-gradient(90deg,#1a6ef5,#38bdf8);pointer-events:none;
+  transition:width .35s ease,opacity .4s ease;
+}
 .nav-group-toggle{
   width:100%;background:transparent;border:none;text-align:left;
   font-family:inherit;cursor:pointer;
@@ -904,4 +908,51 @@ function toggleNavGroup(btn){
   const group = btn.closest('.nav-group');
   if (group) group.classList.toggle('open');
 }
+
+(function boostNav(){
+  if (window.__navBoost) return;
+  window.__navBoost = true;
+  const prefetched = new Set();
+  let bar = document.getElementById('navProgress');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'navProgress';
+    document.body.appendChild(bar);
+  }
+  function startBar(){
+    bar.style.opacity = '1';
+    bar.style.width = '18%';
+    requestAnimationFrame(() => { bar.style.width = '72%'; });
+  }
+  function isAppLink(a){
+    if (!a || a.target === '_blank' || a.hasAttribute('download')) return false;
+    const href = a.getAttribute('href');
+    if (!href || href.startsWith('#') || href.startsWith('javascript:')) return false;
+    if (/^(mailto:|tel:|https?:)/i.test(href)) return false;
+    return href.startsWith('/');
+  }
+  function prefetch(href){
+    if (!href || prefetched.has(href) || href === location.pathname) return;
+    prefetched.add(href);
+    const l = document.createElement('link');
+    l.rel = 'prefetch';
+    l.href = href;
+    l.as = 'document';
+    document.head.appendChild(l);
+  }
+  document.addEventListener('pointerover', (e) => {
+    const a = e.target.closest && e.target.closest('#sidebar a[href], .topbar a[href], .bottom-nav a[href]');
+    if (!isAppLink(a)) return;
+    const href = a.getAttribute('href');
+    const t = setTimeout(() => prefetch(href), 80);
+    a.addEventListener('pointerout', () => clearTimeout(t), { once: true });
+  }, { capture: true, passive: true });
+  document.addEventListener('pointerdown', (e) => {
+    const a = e.target.closest && e.target.closest('#sidebar a[href], .bottom-nav a[href]');
+    if (!isAppLink(a)) return;
+    a.classList.add('nav-pending');
+    startBar();
+    prefetch(a.getAttribute('href'));
+  }, { capture: true, passive: true });
+})();
 </script>

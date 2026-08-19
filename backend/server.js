@@ -74,6 +74,8 @@ require('./services/PushService').init();
 // View Engine
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, '..', 'frontend', 'views'));
+const isDev = process.env.APP_ENV === 'development' || process.env.NODE_ENV === 'development';
+app.set('view cache', !isDev);
 
 // Middleware
 app.use(helmet({
@@ -200,7 +202,10 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-app.use(morgan('combined', { stream: { write: (msg) => logger.info(msg.trim()) } }));
+app.use(morgan('combined', {
+  skip: (req) => req.method === 'GET' && /\.(css|js|mjs|map|png|jpe?g|gif|svg|ico|woff2?|ttf|eot|webp)$/i.test(req.path || ''),
+  stream: { write: (msg) => logger.info(msg.trim()) }
+}));
 
 // Rate limiting — general API
 // 500/15min terlalu sedikit untuk dashboard yang aktif (socket + polling + charts).
@@ -245,8 +250,20 @@ const demoApiLimiter = rateLimit({
 app.use('/api', demoApiLimiter);
 
 
-// Static files
-app.use(express.static(path.join(__dirname, '..', 'frontend', 'public')));
+// Static files — cache 1 hari + stale-while-revalidate supaya pindah menu
+// tidak unduh ulang CSS/JS. HTML tetap dari res.render (tidak di-cache).
+app.use(express.static(path.join(__dirname, '..', 'frontend', 'public'), {
+  etag: true,
+  lastModified: true,
+  maxAge: 24 * 60 * 60 * 1000,
+  setHeaders(res, filePath) {
+    if (/\.(html|json)$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-store');
+      return;
+    }
+    res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+  }
+}));
 
 // ── Guard: block direct access to *.json / *.env / dotfiles under /uploads ──
 // The uploads folder is serve-as-static for user-uploaded media (photos, etc.),
@@ -276,7 +293,14 @@ app.get('/sw.js', (req, res) => {
 app.get('/favicon.ico', async (req, res) => {
   try {
     const { AppSetting } = require('./models');
-    const setting = await AppSetting.findOne({ where: { key: 'favicon_url' } });
+    let setting;
+    if (global._faviconSetting && (Date.now() - global._faviconSettingAt) < 60000) {
+      setting = global._faviconSetting;
+    } else {
+      setting = await AppSetting.findOne({ where: { key: 'favicon_url' } });
+      global._faviconSetting = setting;
+      global._faviconSettingAt = Date.now();
+    }
     if (setting && setting.value) {
       // Strip query string (?v=cache-bust) sebelum resolve path filesystem.
       // URL di DB bisa berbentuk "/uploads/favicon.png?v=1715600000".
@@ -308,9 +332,15 @@ let _appSettingsCache = null;
 let _appSettingsCacheAt = 0;
 const APP_SETTINGS_CACHE_TTL = 60 * 1000; // 60 detik
 // Ekspos cache supaya bisa di-invalidate dari controller setting:
-global._invalidateAppSettingsCache = () => { _appSettingsCache = null; _appSettingsCacheAt = 0; };
+global._invalidateAppSettingsCache = () => {
+  _appSettingsCache = null;
+  _appSettingsCacheAt = 0;
+  global._faviconSetting = null;
+  global._faviconSettingAt = 0;
+};
 
 app.use(async (req, res, next) => {
+  if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) return next();
   try {
     let cfg;
     const now = Date.now();

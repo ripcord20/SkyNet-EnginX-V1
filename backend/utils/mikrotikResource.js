@@ -81,6 +81,56 @@ function unwrapRestData(endpoint, data) {
   return data[0] != null ? data[0] : null;
 }
 
+/** RouterOS REST kadang boolean, binary API kadang string "true"/"false". */
+function mikrotikFlag(v) {
+  return v === true || v === 'true' || v === 'yes' || v === 1 || v === '1';
+}
+
+function mapInterfaceRow(i) {
+  const row = i || {};
+  return {
+    id: row['.id'],
+    name: row.name,
+    type: row.type || 'ether',
+    mtu: row.mtu || 1500,
+    running: mikrotikFlag(row.running),
+    disabled: mikrotikFlag(row.disabled),
+    comment: row.comment || '',
+    macAddress: row['mac-address'] || '',
+    txByte: parseInt(row['tx-byte'], 10) || 0,
+    rxByte: parseInt(row['rx-byte'], 10) || 0,
+    txPacket: parseInt(row['tx-packet'], 10) || 0,
+    rxPacket: parseInt(row['rx-packet'], 10) || 0,
+  };
+}
+
+/**
+ * Traffic/NMS butuh REST/API username. Port 80 sisa form SNMP saja
+ * tidak cukup — itu yang bikin NMS "ada router" lalu gagal load interface.
+ */
+function isMikrotikApiCapable(device) {
+  if (!device) return false;
+  const type = device.type || 'router';
+  if (!['router', 'olt'].includes(type)) return false;
+  const user = String(device.api_username || '').trim();
+  return user.length > 0;
+}
+
+const NMS_API_HINT = 'Isi API Username + Password di Device Management (SNMP Community saja tidak cukup untuk Traffic/NMS)';
+
+function presentNmsRouter(device) {
+  const api_ready = isMikrotikApiCapable(device);
+  return {
+    id: device.id,
+    name: device.name,
+    ip_address: device.ip_address,
+    status: device.status,
+    api_protocol: device.api_protocol || null,
+    api_ready,
+    api_hint: api_ready ? null : NMS_API_HINT,
+  };
+}
+
 module.exports = {
   unwrapSingleton,
   parseCpuPercent,
@@ -88,4 +138,9 @@ module.exports = {
   unwrapRestData,
   REST_SINGLETON_PATHS,
   formatSnmpUptime,
+  mikrotikFlag,
+  mapInterfaceRow,
+  isMikrotikApiCapable,
+  presentNmsRouter,
+  NMS_API_HINT,
 };
