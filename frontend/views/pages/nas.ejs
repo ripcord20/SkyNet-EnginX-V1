@@ -7,7 +7,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/app.css">
   <style>
-    :root { --ns-blue:#2563eb; --border:#e2e8f0; --text:#0f172a; --muted:#64748b; }
+    :root { --ns-blue:#2563eb; --ns-green:#16a34a; --border:#e2e8f0; --text:#0f172a; --muted:#64748b; }
     .ns { font-family:'Plus Jakarta Sans',sans-serif; }
     .ns-hdr { display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:22px; }
     .ns-hdr h1 { font-size:22px; font-weight:800; color:var(--text); margin:0 0 4px; }
@@ -17,46 +17,69 @@
     .btn-outline { background:#fff; border-color:var(--border); color:#374151; }
     .btn-blue { background:var(--ns-blue); border-color:var(--ns-blue); color:#fff; }
     .btn-sm { padding:6px 12px; font-size:12px; border-radius:8px; }
-    .ns-cards { display:grid; grid-template-columns:repeat(3,1fr); background:#fff; border-radius:16px; border:1px solid #e8eaed; overflow:hidden; margin:0 0 36px; }
+    .ns-cards { display:grid; grid-template-columns:repeat(3,1fr); background:#fff; border-radius:16px; border:1px solid #e8eaed; overflow:hidden; margin:0 0 24px; }
     .ns-card { padding:18px 20px; border-right:1px solid #e8eaed; text-align:center; }
     .ns-card:last-child { border-right:none; }
     .card-lbl { font-size:12px; font-weight:500; color:#64748b; margin-bottom:8px; }
     .card-val { font-size:28px; font-weight:800; color:#0f172a; line-height:1; }
-    .ns-panel { background:#fff; border:1px solid var(--border); border-radius:16px; overflow:hidden; margin-top:8px; }
-    .ns-toolbar { display:flex; gap:8px; padding:12px 16px; border-bottom:1px solid var(--border); flex-wrap:wrap; align-items:center; }
-    .ns-table { width:100%; border-collapse:collapse; }
-    .ns-table th { padding:11px 14px; font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; background:#f8fafc; border-bottom:1px solid var(--border); text-align:left; }
-    .ns-table td { padding:12px 14px; font-size:13px; border-bottom:1px solid #f1f5f9; }
+    .hint { font-size:12px; color:var(--muted); line-height:1.55; background:#f8fafc; border:1px solid var(--border); border-radius:10px; padding:10px 12px; margin-bottom:16px; }
+    .empty { text-align:center; padding:48px 16px; color:var(--muted); }
+    .loc-block { margin-bottom:22px; }
+    .loc-hd { display:flex; align-items:center; justify-content:space-between; margin:0 0 10px; }
+    .loc-hd h2 { font-size:14px; font-weight:800; margin:0; letter-spacing:.4px; text-transform:uppercase; color:#334155; }
+    .loc-hd span { font-size:12px; color:var(--muted); font-weight:600; }
+    .nas-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; }
+    .nas-tile { background:#fff; border:1px solid var(--border); border-radius:14px; padding:14px 16px; cursor:pointer; text-align:left; font-family:inherit; width:100%; transition:box-shadow .15s,border-color .15s; }
+    .nas-tile:hover { border-color:#93c5fd; box-shadow:0 8px 24px rgba(37,99,235,.08); }
+    .nas-tile-name { font-size:15px; font-weight:800; color:var(--text); margin:0 0 8px; }
+    .nas-meta { font-size:12px; color:var(--muted); display:flex; flex-direction:column; gap:4px; }
+    .pill { display:inline-flex; align-items:center; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; width:fit-content; }
+    .pill-vpn { background:#dcfce7; color:#15803d; }
+    .pill-local { background:#e2e8f0; color:#475569; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; }
-    .act-btn { width:30px; height:30px; border:1px solid var(--border); background:#fff; border-radius:8px; cursor:pointer; color:#64748b; }
-    .act-btn.danger { color:#dc2626; }
     .pp-modal-overlay { display:none; position:fixed; inset:0; width:auto !important; max-width:none !important; background:rgba(0,0,0,.45); z-index:1000; align-items:center; justify-content:center; backdrop-filter:blur(3px); padding:16px; }
     .pp-modal-overlay.show { display:flex !important; }
-    .pp-modal { background:#fff; border-radius:16px; padding:28px; width:92%; max-width:520px; max-height:92vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,.2); animation:ppIn .2s ease; }
+    .pp-modal { background:#fff; border-radius:16px; padding:0; width:92%; max-width:560px; max-height:92vh; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,.2); animation:ppIn .2s ease; display:flex; flex-direction:column; }
+    .pp-modal.wide { max-width:720px; }
     @keyframes ppIn { from{opacity:0;transform:translateY(14px) scale(.97)} to{opacity:1;transform:none} }
-    .pp-modal-hdr { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
+    .pp-modal-hdr { display:flex; align-items:flex-start; justify-content:space-between; padding:20px 22px 12px; gap:12px; }
     .pp-modal-hdr h3 { font-size:16px; font-weight:800; margin:0; color:#0f172a; }
-    .pp-modal-close { width:30px;height:30px;border-radius:8px;border:none;background:#f8fafc;cursor:pointer;font-size:18px;color:#64748b;display:flex;align-items:center;justify-content:center;transition:all .15s; }
+    .pp-modal-hdr p { font-size:12px; color:var(--muted); margin:4px 0 0; }
+    .pp-modal-close { width:30px;height:30px;border-radius:8px;border:none;background:#f8fafc;cursor:pointer;font-size:18px;color:#64748b;display:flex;align-items:center;justify-content:center;flex-shrink:0; }
     .pp-modal-close:hover { background:#fee2e2; color:#dc2626; }
-    .pp-form-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
-    @media(max-width:480px){ .pp-form-grid { grid-template-columns:1fr; } }
+    .pp-modal-body { padding:0 22px 8px; overflow-y:auto; flex:1; }
+    .pp-form-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; padding-bottom:8px; }
+    @media(max-width:560px){ .pp-form-grid { grid-template-columns:1fr; } }
     .pp-form-group { display:flex; flex-direction:column; gap:5px; }
     .pp-form-group.full { grid-column:1/-1; }
     .pp-form-label { font-size:12px; font-weight:600; color:#374151; }
     .pp-form-label span { color:#dc2626; }
-    .pp-form-control { padding:9px 12px; border:1.5px solid #e2e8f0; border-radius:9px; font-size:13px; font-family:inherit; color:#0f172a; outline:none; transition:border-color .15s,box-shadow .15s; background:#fff; width:100%; box-sizing:border-box; }
+    .pp-form-control { padding:9px 12px; border:1.5px solid #e2e8f0; border-radius:9px; font-size:13px; font-family:inherit; color:#0f172a; outline:none; background:#fff; width:100%; box-sizing:border-box; }
     .pp-form-control:focus { border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.12); }
-    .pp-form-control::placeholder { color:#94a3b8; }
-    textarea.pp-form-control { min-height:72px; resize:vertical; }
     .pp-form-hint { font-size:11px; color:#94a3b8; }
-    .pp-modal-footer { display:flex; gap:10px; justify-content:flex-end; margin-top:20px; padding-top:16px; border-top:1px solid #f1f5f9; }
-    .btn-pp-save { background:#2563eb; color:#fff; border:none; padding:10px 22px; border-radius:10px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit; transition:background .15s; }
-    .btn-pp-save:hover { background:#1d4ed8; }
-    .btn-pp-cancel { background:#f8fafc; color:#374151; border:1.5px solid #e2e8f0; padding:9px 18px; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; transition:all .15s; }
-    .btn-pp-cancel:hover { background:#f1f5f9; }
-    .hint { font-size:12px; color:var(--muted); line-height:1.55; background:#f8fafc; border:1px solid var(--border); border-radius:10px; padding:10px 12px; margin-bottom:16px; }
-    .empty { text-align:center; padding:48px 16px; color:var(--muted); }
-    @media(max-width:700px){ .ns-cards{grid-template-columns:1fr;} .ns-card{border-right:none;border-bottom:1px solid #e8eaed;} }
+    .pp-modal-footer { display:flex; gap:10px; justify-content:flex-end; padding:14px 22px 18px; border-top:1px solid #f1f5f9; }
+    .btn-pp-save { background:#2563eb; color:#fff; border:none; padding:10px 22px; border-radius:10px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit; }
+    .btn-pp-cancel { background:#f8fafc; color:#374151; border:1.5px solid #e2e8f0; padding:9px 18px; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; }
+    .acc { border:1px solid var(--border); border-radius:12px; margin-bottom:10px; overflow:hidden; }
+    .acc-btn { width:100%; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:13px 14px; background:#f8fafc; border:none; cursor:pointer; font-family:inherit; font-size:13px; font-weight:800; color:#0f172a; text-align:left; }
+    .acc-btn .chev { color:#94a3b8; transition:transform .15s; }
+    .acc.open .acc-btn .chev { transform:rotate(180deg); }
+    .acc-body { display:none; padding:14px; border-top:1px solid var(--border); background:#fff; }
+    .acc.open .acc-body { display:block; }
+    .kv { display:grid; grid-template-columns:160px 1fr; gap:8px 12px; font-size:13px; align-items:center; }
+    .kv dt { color:#64748b; font-weight:600; }
+    .kv dd { margin:0; color:#0f172a; font-weight:600; word-break:break-all; }
+    .warn-box { background:#fffbeb; border:1px solid #fde68a; color:#92400e; border-radius:10px; padding:10px 12px; font-size:12px; line-height:1.5; margin-top:12px; }
+    .script-bar { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+    .seg { display:inline-flex; background:#f1f5f9; border-radius:9px; padding:3px; }
+    .seg button { border:none; background:transparent; padding:6px 12px; border-radius:7px; font-size:12px; font-weight:700; cursor:pointer; color:#64748b; font-family:inherit; }
+    .seg button.on { background:#fff; color:#0f172a; box-shadow:0 1px 3px rgba(15,23,42,.08); }
+    .script-box { background:#0f172a; color:#e2e8f0; border-radius:12px; padding:14px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11.5px; line-height:1.55; overflow:auto; max-height:360px; white-space:pre; }
+    .pwd-row { display:flex; gap:6px; align-items:center; }
+    .pwd-row input { flex:1; }
+    .eye { width:34px; height:34px; border:1px solid var(--border); background:#fff; border-radius:8px; cursor:pointer; color:#64748b; flex-shrink:0; }
+    .checks { display:flex; gap:14px; flex-wrap:wrap; font-size:13px; font-weight:600; color:#334155; }
+    @media(max-width:700px){ .ns-cards{grid-template-columns:1fr;} .ns-card{border-right:none;border-bottom:1px solid #e8eaed;} .kv{grid-template-columns:1fr;} }
   </style>
 </head>
 <body>
@@ -68,18 +91,18 @@
       <div class="ns-hdr">
         <div>
           <h1>NAS RADIUS</h1>
-          <p>Daftar Network Access Server (router) yang boleh otentikasi ke FreeRADIUS</p>
+          <p>Daftar Network Access Server, koneksi VPN, profile PPP, dan script konfigurasi MikroTik</p>
         </div>
         <div class="ns-hdr-r">
-          <button class="btn btn-outline btn-sm" onclick="loadNas()">Refresh</button>
-          <button class="btn btn-outline btn-sm" onclick="syncNas()">Sinkron dari Devices</button>
-          <button class="btn btn-blue btn-sm" onclick="openNasModal()">+ NAS</button>
+          <button class="btn btn-outline btn-sm" type="button" onclick="loadNas()">Refresh</button>
+          <button class="btn btn-outline btn-sm" type="button" onclick="syncNas()">Sinkron dari Devices</button>
+          <button class="btn btn-blue btn-sm" type="button" onclick="openNasModal()">+ NAS</button>
         </div>
       </div>
 
       <div class="hint">
-        Setiap MikroTik yang memakai RADIUS harus terdaftar di sini (IP = <code>nasname</code>, secret sama dengan di <code>/radius add</code>).
-        PPPoE user tersimpan di RADIUS; tanpa NAS yang cocok, Auth-Request dari router ditolak.
+        Setiap MikroTik yang memakai RADIUS harus terdaftar di sini.
+        Isi mode VPN (L2TP/PPTP), pool PPP, dan secret — lalu buka <strong>Detail NAS</strong> untuk menyalin script RouterOS v6/v7.
       </div>
 
       <div class="ns-cards">
@@ -88,17 +111,7 @@
         <div class="ns-card"><div class="card-lbl">Online</div><div class="card-val" id="stOnline">–</div></div>
       </div>
 
-      <section class="ns-panel">
-        <div class="ns-toolbar">
-          <span style="font-size:13px;font-weight:800;flex:1">Daftar NAS</span>
-        </div>
-        <div style="overflow:auto">
-          <table class="ns-table">
-            <thead><tr><th>Nama</th><th>IP / Host</th><th>Tipe</th><th>Secret</th><th>Deskripsi</th><th></th></tr></thead>
-            <tbody id="nasTbody"><tr><td colspan="6" class="empty">Memuat...</td></tr></tbody>
-          </table>
-        </div>
-      </section>
+      <div id="nasGroups"></div>
     </main>
   </div>
 </div>
@@ -106,124 +119,408 @@
 <div class="pp-modal-overlay" id="nasModal">
   <div class="pp-modal">
     <div class="pp-modal-hdr">
-      <h3 id="nasModalTitle">Tambah NAS</h3>
-      <button type="button" class="pp-modal-close" onclick="closeModal()">×</button>
+      <div>
+        <h3 id="nasModalTitle">Tambah NAS</h3>
+        <p>Data RADIUS + parameter script MikroTik</p>
+      </div>
+      <button type="button" class="pp-modal-close" onclick="closeModal('nasModal')">×</button>
     </div>
-    <input type="hidden" id="nId">
-    <div class="pp-form-grid">
-      <div class="pp-form-group">
-        <label class="pp-form-label">IP / hostname <span>*</span></label>
-        <input class="pp-form-control" id="nHost" placeholder="e.g. 192.168.22.1">
-        <span class="pp-form-hint">IP router yang Auth ke RADIUS</span>
-      </div>
-      <div class="pp-form-group">
-        <label class="pp-form-label">Nama pendek</label>
-        <input class="pp-form-control" id="nShort" placeholder="e.g. CORE">
-        <span class="pp-form-hint">Opsional — label di daftar NAS</span>
-      </div>
-      <div class="pp-form-group">
-        <label class="pp-form-label">Secret <span>*</span></label>
-        <input class="pp-form-control" id="nSecret" placeholder="shared secret">
-        <span class="pp-form-hint">Sama dengan /radius add di MikroTik</span>
-      </div>
-      <div class="pp-form-group">
-        <label class="pp-form-label">Tipe</label>
-        <select class="pp-form-control" id="nType">
-          <option value="mikrotik">MikroTik</option>
-          <option value="other">Other</option>
-        </select>
-      </div>
-      <div class="pp-form-group full">
-        <label class="pp-form-label">Deskripsi</label>
-        <textarea class="pp-form-control" id="nDesc" placeholder="Keterangan opsional..."></textarea>
+    <div class="pp-modal-body">
+      <input type="hidden" id="nId">
+      <div class="pp-form-grid">
+        <div class="pp-form-group">
+          <label class="pp-form-label">IP / hostname <span>*</span></label>
+          <input class="pp-form-control" id="nHost" placeholder="e.g. 192.168.22.1">
+          <span class="pp-form-hint">IP router yang Auth ke RADIUS (nasname)</span>
+        </div>
+        <div class="pp-form-group">
+          <label class="pp-form-label">Nama pendek</label>
+          <input class="pp-form-control" id="nShort" placeholder="e.g. uji">
+        </div>
+        <div class="pp-form-group">
+          <label class="pp-form-label">Lokasi</label>
+          <input class="pp-form-control" id="nLoc" placeholder="e.g. SINGOTRUNAN">
+        </div>
+        <div class="pp-form-group">
+          <label class="pp-form-label">Tipe</label>
+          <select class="pp-form-control" id="nType">
+            <option value="mikrotik">MikroTik</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="pp-form-group">
+          <label class="pp-form-label">Mode koneksi</label>
+          <select class="pp-form-control" id="nMode" onchange="toggleVpnFields()">
+            <option value="vpn">VPN (L2TP / PPTP)</option>
+            <option value="local">Langsung (tanpa tunnel)</option>
+          </select>
+        </div>
+        <div class="pp-form-group vpn-only">
+          <label class="pp-form-label">IP server VPN</label>
+          <input class="pp-form-control" id="nVpnHost" placeholder="IP publik / host VPN">
+        </div>
+        <div class="pp-form-group vpn-only">
+          <label class="pp-form-label">Username VPN</label>
+          <input class="pp-form-control" id="nVpnUser" placeholder="skynetradius_…">
+        </div>
+        <div class="pp-form-group vpn-only">
+          <label class="pp-form-label">Password VPN</label>
+          <input class="pp-form-control" id="nVpnPass" type="password" autocomplete="new-password">
+        </div>
+        <div class="pp-form-group vpn-only full">
+          <label class="pp-form-label">Protokol</label>
+          <div class="checks">
+            <label><input type="checkbox" id="nProtoL2tp" checked> L2TP</label>
+            <label><input type="checkbox" id="nProtoPptp" checked> PPTP (hanya v6)</label>
+          </div>
+        </div>
+        <div class="pp-form-group">
+          <label class="pp-form-label">Nama profile PPP</label>
+          <input class="pp-form-control" id="nProfile" placeholder="BILLINGRADIUS" value="BILLINGRADIUS">
+        </div>
+        <div class="pp-form-group">
+          <label class="pp-form-label">IP gateway</label>
+          <input class="pp-form-control" id="nGw" placeholder="10.2.96.1">
+        </div>
+        <div class="pp-form-group full">
+          <label class="pp-form-label">Block IP pool</label>
+          <input class="pp-form-control" id="nPool" placeholder="10.2.96.2-10.2.111.254">
+        </div>
+        <div class="pp-form-group">
+          <label class="pp-form-label">Secret NAS <span>*</span></label>
+          <input class="pp-form-control" id="nSecret" placeholder="shared secret" type="password" autocomplete="new-password">
+          <span class="pp-form-hint">Sama dengan /radius add secret di MikroTik</span>
+        </div>
+        <div class="pp-form-group">
+          <label class="pp-form-label">RADIUS address</label>
+          <input class="pp-form-control" id="nRadAddr" placeholder="172.20.1.1">
+          <span class="pp-form-hint">IP RADIUS yang dilihat router (sering IP dalam tunnel)</span>
+        </div>
+        <div class="pp-form-group full">
+          <label class="pp-form-label">Redirect isolir (host:port)</label>
+          <input class="pp-form-control" id="nRedirect" placeholder="contoh 10.0.0.1:3400">
+        </div>
+        <div class="pp-form-group full">
+          <label class="pp-form-label">Deskripsi</label>
+          <textarea class="pp-form-control" id="nDesc" placeholder="Keterangan opsional..."></textarea>
+        </div>
       </div>
     </div>
     <div class="pp-modal-footer">
-      <button type="button" class="btn-pp-cancel" onclick="closeModal()">Batal</button>
+      <button type="button" class="btn-pp-cancel" onclick="closeModal('nasModal')">Batal</button>
       <button type="button" class="btn-pp-save" onclick="saveNas()">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<div class="pp-modal-overlay" id="detailModal">
+  <div class="pp-modal wide">
+    <div class="pp-modal-hdr">
+      <div>
+        <h3>Detail NAS</h3>
+        <p>Informasi detail dan script konfigurasi perangkat NAS</p>
+      </div>
+      <button type="button" class="pp-modal-close" onclick="closeModal('detailModal')">×</button>
+    </div>
+    <div class="pp-modal-body" id="detailBody"></div>
+    <div class="pp-modal-footer">
+      <button type="button" class="btn-pp-cancel" onclick="editFromDetail()">Ubah</button>
+      <button type="button" class="btn-pp-cancel" onclick="deleteFromDetail()" style="color:#dc2626;border-color:#fecaca">Hapus</button>
+      <button type="button" class="btn-pp-save" onclick="closeModal('detailModal')">Tutup</button>
     </div>
   </div>
 </div>
 
 <script src="/js/app.js"></script>
 <script>
+var currentDetail = null;
+var scriptVersion = 'v6';
+
 function esc(v) {
-  return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) {
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]);
+  });
 }
-function closeModal() { document.getElementById('nasModal').classList.remove('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+function mask(v) { return v ? '••••••••' : '—'; }
+function protoLabel(n) {
+  var p = n.protocols || [];
+  if (!p.length) return '—';
+  return p.map(function(x){ return String(x).toUpperCase(); }).join(', ');
+}
+
+function toggleVpnFields() {
+  var vpn = document.getElementById('nMode').value === 'vpn';
+  document.querySelectorAll('.vpn-only').forEach(function(el){ el.style.display = vpn ? '' : 'none'; });
+}
+
+function groupNas(list) {
+  var map = {};
+  list.forEach(function(n) {
+    var key = (n.location && String(n.location).trim()) || 'Tanpa lokasi';
+    if (!map[key]) map[key] = [];
+    map[key].push(n);
+  });
+  return map;
+}
 
 async function loadNas() {
   const [st, nas] = await Promise.all([App.api('/radius/stats'), App.api('/radius/nas')]);
-  if (st?.success) {
+  if (st && st.success) {
     const d = st.data || {};
     document.getElementById('stNas').textContent = d.nas ?? 0;
     document.getElementById('stUsers').textContent = d.users ?? 0;
     document.getElementById('stOnline').textContent = d.online ?? 0;
   }
-  const tb = document.getElementById('nasTbody');
-  const list = nas?.data || [];
+  const wrap = document.getElementById('nasGroups');
+  const list = (nas && nas.data) || [];
   if (!list.length) {
-    tb.innerHTML = '<tr><td colspan="6" class="empty">Belum ada NAS. Sinkron dari Device Management atau tambah manual.</td></tr>';
+    wrap.innerHTML = '<div class="empty">Belum ada NAS. Sinkron dari Device Management atau tambah manual.</div>';
     return;
   }
-  tb.innerHTML = list.map(n => `
-    <tr>
-      <td><strong>${esc(n.shortname || n.nasname)}</strong></td>
-      <td class="mono">${esc(n.nasname)}</td>
-      <td>${esc(n.type || 'mikrotik')}</td>
-      <td class="mono">${esc(n.secret || '')}</td>
-      <td>${esc(n.description || '—')}</td>
-      <td style="white-space:nowrap">
-        <button class="act-btn" onclick='editNas(${JSON.stringify(n).replace(/'/g,"&#39;")})'>✎</button>
-        <button class="act-btn danger" onclick="deleteNas(${n.id})">✕</button>
-      </td>
-    </tr>`).join('');
+  const groups = groupNas(list);
+  wrap.innerHTML = Object.keys(groups).map(function(loc) {
+    const items = groups[loc];
+    return '<section class="loc-block">' +
+      '<div class="loc-hd"><h2>' + esc(loc) + '</h2><span>' + items.length + ' NAS</span></div>' +
+      '<div class="nas-grid">' + items.map(function(n) {
+        const mode = n.connection_mode === 'local' ? 'Langsung' : 'VPN';
+        const pill = n.connection_mode === 'local' ? 'pill-local' : 'pill-vpn';
+        const host = n.vpn_server || n.nasname || '—';
+        return '<button type="button" class="nas-tile" onclick="openDetail(' + Number(n.id) + ')">' +
+          '<div class="nas-tile-name">' + esc(n.shortname || n.nasname) + '</div>' +
+          '<div class="nas-meta">' +
+            '<span class="pill ' + pill + '">' + esc(mode) + '</span>' +
+            '<span>IP Server: <span class="mono">' + esc(host) + '</span></span>' +
+            '<span>Secret: <span class="mono">' + mask(n.secret) + '</span></span>' +
+          '</div></button>';
+      }).join('') + '</div></section>';
+  }).join('');
 }
 
 function openNasModal() {
   document.getElementById('nId').value = '';
-  document.getElementById('nHost').value = '';
-  document.getElementById('nShort').value = '';
-  document.getElementById('nSecret').value = '';
+  ['nHost','nShort','nLoc','nVpnHost','nVpnUser','nVpnPass','nGw','nPool','nSecret','nRadAddr','nRedirect','nDesc'].forEach(function(id){
+    document.getElementById(id).value = '';
+  });
   document.getElementById('nType').value = 'mikrotik';
-  document.getElementById('nDesc').value = '';
+  document.getElementById('nMode').value = 'vpn';
+  document.getElementById('nProfile').value = 'BILLINGRADIUS';
+  document.getElementById('nProtoL2tp').checked = true;
+  document.getElementById('nProtoPptp').checked = true;
   document.getElementById('nasModalTitle').textContent = 'Tambah NAS';
+  toggleVpnFields();
   document.getElementById('nasModal').classList.add('show');
 }
-function editNas(n) {
-  document.getElementById('nId').value = n.id;
+
+function fillForm(n) {
+  document.getElementById('nId').value = n.id || '';
   document.getElementById('nHost').value = n.nasname || '';
   document.getElementById('nShort').value = n.shortname || '';
+  document.getElementById('nLoc').value = n.location || '';
   document.getElementById('nSecret').value = n.secret || '';
   document.getElementById('nType').value = n.type || 'mikrotik';
   document.getElementById('nDesc').value = n.description || '';
+  document.getElementById('nMode').value = n.connection_mode === 'local' ? 'local' : 'vpn';
+  document.getElementById('nVpnHost').value = n.vpn_server || '';
+  document.getElementById('nVpnUser').value = n.vpn_username || '';
+  document.getElementById('nVpnPass').value = n.vpn_password || '';
+  document.getElementById('nProfile').value = n.profile_name || 'BILLINGRADIUS';
+  document.getElementById('nGw').value = n.gateway_ip || '';
+  document.getElementById('nPool').value = n.pool_ranges || '';
+  document.getElementById('nRadAddr').value = n.radius_address || '';
+  document.getElementById('nRedirect').value = n.isolir_redirect || '';
+  var proto = n.protocols || ['l2tp','pptp'];
+  document.getElementById('nProtoL2tp').checked = proto.indexOf('l2tp') >= 0;
+  document.getElementById('nProtoPptp').checked = proto.indexOf('pptp') >= 0;
+  toggleVpnFields();
+}
+
+function collectBody() {
+  var proto = [];
+  if (document.getElementById('nProtoL2tp').checked) proto.push('l2tp');
+  if (document.getElementById('nProtoPptp').checked) proto.push('pptp');
+  return {
+    nasname: document.getElementById('nHost').value.trim(),
+    shortname: document.getElementById('nShort').value.trim(),
+    location: document.getElementById('nLoc').value.trim(),
+    secret: document.getElementById('nSecret').value,
+    type: document.getElementById('nType').value.trim() || 'mikrotik',
+    description: document.getElementById('nDesc').value.trim(),
+    connection_mode: document.getElementById('nMode').value,
+    vpn_server: document.getElementById('nVpnHost').value.trim(),
+    vpn_username: document.getElementById('nVpnUser').value.trim(),
+    vpn_password: document.getElementById('nVpnPass').value,
+    protocols: proto,
+    profile_name: document.getElementById('nProfile').value.trim() || 'BILLINGRADIUS',
+    gateway_ip: document.getElementById('nGw').value.trim(),
+    pool_ranges: document.getElementById('nPool').value.trim(),
+    radius_address: document.getElementById('nRadAddr').value.trim(),
+    isolir_redirect: document.getElementById('nRedirect').value.trim()
+  };
+}
+
+async function saveNas() {
+  var id = document.getElementById('nId').value;
+  var body = collectBody();
+  if (!body.nasname) { App.showToast('IP / hostname wajib diisi', 'error'); return; }
+  var url = id ? '/radius/nas/' + id : '/radius/nas';
+  var r = await App.api(url, { method: id ? 'PUT' : 'POST', body: JSON.stringify(body) });
+  if (r && r.success) {
+    closeModal('nasModal');
+    App.showToast(r.message, 'success');
+    await loadNas();
+  } else App.showToast((r && r.message) || 'Gagal', 'error');
+}
+
+function accHtml(id, title, inner, open) {
+  return '<div class="acc' + (open ? ' open' : '') + '" id="acc-' + id + '">' +
+    '<button type="button" class="acc-btn" onclick="toggleAcc(\'' + id + '\')"><span>' + title + '</span><span class="chev">▾</span></button>' +
+    '<div class="acc-body">' + inner + '</div></div>';
+}
+
+function toggleAcc(id) {
+  document.querySelectorAll('#detailBody .acc').forEach(function(el){
+    if (el.id === 'acc-' + id) el.classList.toggle('open');
+    else el.classList.remove('open');
+  });
+}
+
+function kv(rows) {
+  return '<dl class="kv">' + rows.map(function(r){
+    return '<dt>' + esc(r[0]) + '</dt><dd>' + r[1] + '</dd>';
+  }).join('') + '</dl>';
+}
+
+function pwdCell(value, key) {
+  if (!value) return '—';
+  return '<span class="pwd-row"><span class="mono" id="pv-' + key + '" data-v="' + esc(value) + '">' + mask(value) + '</span>' +
+    '<button type="button" class="eye" onclick="revealPwd(\'' + key + '\')">lihat</button></span>';
+}
+
+function revealPwd(key) {
+  var el = document.getElementById('pv-' + key);
+  if (!el) return;
+  if (el.getAttribute('data-shown') === '1') {
+    el.textContent = '••••••••';
+    el.setAttribute('data-shown', '0');
+  } else {
+    el.textContent = el.getAttribute('data-v') || '';
+    el.setAttribute('data-shown', '1');
+  }
+}
+
+function currentScriptText(n) {
+  if (!n || !n.scripts) return '';
+  if (n.scripts.error && !n.scripts[scriptVersion]) return '';
+  return n.scripts[scriptVersion] || '';
+}
+
+function renderScriptBox() {
+  var n = currentDetail;
+  var box = document.getElementById('scriptBox');
+  var note = document.getElementById('scriptNote');
+  var title = document.getElementById('scriptTitle');
+  if (!box) return;
+  var script = currentScriptText(n);
+  title.textContent = scriptVersion === 'v7'
+    ? 'RouterOS v7 Script (Format redirect-to, tanpa PPTP)'
+    : 'RouterOS v6 Script (Format redirect-to)';
+  document.getElementById('btnV6').classList.toggle('on', scriptVersion === 'v6');
+  document.getElementById('btnV7').classList.toggle('on', scriptVersion === 'v7');
+  if (!script) {
+    box.textContent = '';
+    note.style.display = 'block';
+    note.textContent = (n && n.scripts && n.scripts.error)
+      ? n.scripts.error
+      : 'Lengkapi IP server VPN, username/password VPN, secret, dan RADIUS address lalu simpan.';
+    return;
+  }
+  note.style.display = 'none';
+  box.textContent = script;
+}
+
+function setScriptVersion(v) {
+  scriptVersion = v;
+  renderScriptBox();
+}
+
+async function copyScript() {
+  var text = currentScriptText(currentDetail);
+  if (!text) { App.showToast('Script belum siap', 'error'); return; }
+  try {
+    await navigator.clipboard.writeText(text);
+    App.showToast('Script disalin', 'success');
+  } catch (e) {
+    App.showToast('Gagal menyalin', 'error');
+  }
+}
+
+function renderDetail(n) {
+  currentDetail = n;
+  scriptVersion = 'v6';
+  var conn = kv([
+    ['Mode Koneksi', '<span class="pill ' + (n.connection_mode === 'local' ? 'pill-local' : 'pill-vpn') + '">' + esc(n.connection_mode === 'local' ? 'Langsung' : 'VPN') + '</span>'],
+    ['Protocol', esc(protoLabel(n))],
+    ['IP Server VPN', '<span class="mono">' + esc(n.vpn_server || '—') + '</span>'],
+    ['Username', '<span class="mono">' + esc(n.vpn_username || '—') + '</span>'],
+    ['Password', pwdCell(n.vpn_password, 'vpn')]
+  ]);
+  var ppp = kv([
+    ['Nama Profile', '<span class="mono">' + esc(n.profile_name || '—') + '</span>'],
+    ['IP Gateway', '<span class="mono">' + esc(n.gateway_ip || '—') + '</span>'],
+    ['Block IP Pool', '<span class="mono">' + esc(n.pool_ranges || '—') + '</span>']
+  ]) + '<div class="warn-box"><strong>Konfigurasi wajib</strong><br>Nama profile dipakai identifikasi di RADIUS. Rate limit bisa dikosongkan agar mengikuti paket. Block IP pool dipakai GenieACS/isolir untuk mengenali pelanggan.</div>';
+  var nas = kv([
+    ['Secret NAS', pwdCell(n.secret, 'sec')],
+    ['RADIUS Address', '<span class="mono">' + esc(n.radius_address || '—') + '</span>']
+  ]);
+  var scriptInner =
+    '<div class="script-bar">' +
+      '<div class="seg">' +
+        '<button type="button" id="btnV6" class="on" onclick="setScriptVersion(\'v6\')">RouterOS v6</button>' +
+        '<button type="button" id="btnV7" onclick="setScriptVersion(\'v7\')">RouterOS v7</button>' +
+      '</div>' +
+      '<button type="button" class="btn btn-blue btn-sm" onclick="copyScript()">Salin Script</button>' +
+    '</div>' +
+    '<div id="scriptTitle" style="font-size:12px;font-weight:700;margin:0 0 8px;color:#334155"></div>' +
+    '<div class="warn-box" id="scriptNote" style="display:none;margin:0 0 10px"></div>' +
+    '<pre class="script-box" id="scriptBox"></pre>';
+  document.getElementById('detailBody').innerHTML =
+    accHtml('conn', 'Informasi Koneksi', conn, true) +
+    accHtml('ppp', 'Informasi Profile PPP', ppp, false) +
+    accHtml('nas', 'Informasi NAS', nas, false) +
+    accHtml('script', 'Script Otomatis', scriptInner, false);
+  renderScriptBox();
+}
+
+async function openDetail(id) {
+  const r = await App.api('/radius/nas/' + id);
+  if (!r || !r.success) { App.showToast((r && r.message) || 'NAS tidak ditemukan', 'error'); return; }
+  renderDetail(r.data);
+  document.getElementById('detailModal').classList.add('show');
+}
+
+function editFromDetail() {
+  if (!currentDetail) return;
+  closeModal('detailModal');
+  fillForm(currentDetail);
   document.getElementById('nasModalTitle').textContent = 'Edit NAS';
   document.getElementById('nasModal').classList.add('show');
 }
-async function saveNas() {
-  const id = document.getElementById('nId').value;
-  const body = {
-    nasname: document.getElementById('nHost').value.trim(),
-    shortname: document.getElementById('nShort').value.trim(),
-    secret: document.getElementById('nSecret').value,
-    type: document.getElementById('nType').value.trim() || 'mikrotik',
-    description: document.getElementById('nDesc').value.trim()
-  };
-  if (!body.nasname) { App.showToast('IP / hostname wajib diisi', 'error'); return; }
-  const url = id ? '/radius/nas/' + id : '/radius/nas';
-  const r = await App.api(url, { method: id ? 'PUT' : 'POST', body: JSON.stringify(body) });
-  if (r?.success) { closeModal(); App.showToast(r.message, 'success'); await loadNas(); }
-  else App.showToast(r?.message || 'Gagal', 'error');
-}
-async function deleteNas(id) {
+
+async function deleteFromDetail() {
+  if (!currentDetail) return;
   if (!confirm('Hapus NAS ini? Router tersebut tidak bisa otentikasi RADIUS lagi.')) return;
-  const r = await App.api('/radius/nas/' + id, { method:'DELETE' });
-  App.showToast(r?.success ? 'NAS dihapus' : (r?.message || 'Gagal'), r?.success ? 'success' : 'error');
+  const r = await App.api('/radius/nas/' + currentDetail.id, { method:'DELETE' });
+  App.showToast(r && r.success ? 'NAS dihapus' : ((r && r.message) || 'Gagal'), r && r.success ? 'success' : 'error');
+  closeModal('detailModal');
   await loadNas();
 }
+
 async function syncNas() {
   const r = await App.api('/radius/nas/sync-devices', { method:'POST', body:'{}' });
-  App.showToast(r?.message || 'Selesai', r?.success ? 'success' : 'error');
+  App.showToast((r && r.message) || 'Selesai', r && r.success ? 'success' : 'error');
   await loadNas();
 }
 
