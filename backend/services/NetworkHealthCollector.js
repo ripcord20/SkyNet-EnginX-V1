@@ -9,14 +9,24 @@
  *
  * Tier 1: ICMP RTT/loss, up/down, traffic interface
  * Tier 2: CPU/RAM/disk, suhu/tegangan, optik SFP + ringkasan ONT
- * Tier 3: BGP/OSPF, error/CRC port, DHCP/DNS/RADIUS, flow lite (conntrack)
+ * Tier 3: sesi PPPoE (bukan BGP), error/CRC port, DHCP/DNS/RADIUS, flow lite
  */
 
 const { exec } = require('child_process');
 const dns = require('dns').promises;
 const net = require('net');
 const logger = require('../utils/logger');
-const { parseResource } = require('../utils/mikrotikResource');
+const { parseResource, mikrotikFlag } = require('../utils/mikrotikResource');
+const {
+  INFRA_DEVICE_TYPES,
+  canPollMikrotik,
+  normalizeIfaces,
+  pickTrafficIfaces,
+  trafficMbpsFromStats,
+  parsePppoeActive,
+  pppoeRollup,
+  parseWirelessEntries,
+} = require('../utils/networkHealthMetrics');
 
 const KEYS = {
   enabled:  'nhealth_enabled',
@@ -149,10 +159,6 @@ function num(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
-function flag(v) {
-  return v === true || v === 'true' || v === 'yes';
-}
-
 async function _mtFor(device) {
   const { getMikrotikInstanceByDevice, MikrotikService } = require('./MikrotikService');
   if (device.api_username && device.api_port) {
@@ -183,8 +189,8 @@ async function pollMikrotik(device, cfg) {
     version: null,
     uptime: null,
     interfaces: [],
-    bgp: [],
-    ospf: [],
+    trafficIfaces: [],
+    pppoe: { active: 0, sample: [] },
     wireless: [],
     sfp: [],
     dhcp: null,
@@ -200,10 +206,14 @@ async function pollMikrotik(device, cfg) {
   catch (e) { return { ok: false, error: e.message, extra, metrics }; }
 
   const [resRaw, ifaceRaw, healthRaw] = await Promise.all([
-    _safeGet(mt, '/system/resource', 5000),
-    _safeGet(mt, '/interface', 6000),
-    cfg.tier2 ? _safeGet(mt, '/system/health', 4000) : Promise.resolve(null),
+    _safeGet(mt, '/system/resource', 8000),
+    _safeGet(mt, '/interface', 8000),
+    cfg.tier2 ? _safeGet(mt, '/system/health', 5000) : Promise.resolve(null),
   ]);
+
+  if (!resRaw && !ifaceRaw) {
+    return { ok: false, error: 'API MikroTik tidak merespons (/system/resource & /interface kosong)', extra, metrics };
+  }
 
   if (resRaw) {
     const res = parseResource(resRaw);
@@ -225,38 +235,43 @@ async function pollMikrotik(device, cfg) {
     metrics.voltage = h.voltage;
   }
 
-  const ifaces = Array.isArray(ifaceRaw) ? ifaceRaw : [];
-  const physical = ifaces.filter(i => {
-    const t = String(i.type || '');
-    const n = String(i.name || '');
-    if (flag(i.disabled)) return false;
-    if (/^pppoe-|^<pppoe-|^ovpn|^sstp|^l2tp|^pptp|^wg-/i.test(n)) return false;
-    return /ether|sfp|vlan|bridge|wlan|wifi|bond/i.test(t + n);
-  }).slice(0, 16);
-
-  extra.interfaces = physical.map(i => {
-    const err = num(i['rx-error']) + num(i['tx-error']) + num(i['rx-fcs-error']);
-    const drop = num(i['rx-drop']) + num(i['tx-drop']);
-    const running = flag(i.running);
-    if (!running) metrics.ifaceDown += 1;
+  const rawIfaces = Array.isArray(ifaceRaw) ? ifaceRaw : (ifaceRaw ? [ifaceRaw] : []);
+  extra.interfaces = normalizeIfaces(ifaceRaw).map((i) => {
+    const src = rawIfaces.find((r) => r && r.name === i.name) || {};
+    const err = num(src['rx-error']) + num(src['tx-error']) + num(src['rx-fcs-error']);
+    const drop = num(src['rx-drop']) + num(src['tx-drop']);
     metrics.ifaceErrors += err;
     metrics.ifaceDrops += drop;
+    if (!i.running) metrics.ifaceDown += 1;
     return {
       name: i.name,
       type: i.type || '',
-      running,
-      rxByte: num(i['rx-byte']),
-      txByte: num(i['tx-byte']),
+      running: i.running,
+      rxByte: i.rxByte,
+      txByte: i.txByte,
       errors: err,
       drops: drop,
       comment: i.comment || '',
     };
   });
 
+  const trafficIfaces = pickTrafficIfaces(extra.interfaces);
+  extra.trafficIfaces = trafficIfaces.map((i) => i.name);
+  if (trafficIfaces.length) {
+    try {
+      const stats = await mt.getInterfacesBulkStats(trafficIfaces.map((i) => i.name));
+      const live = trafficMbpsFromStats(stats);
+      metrics.rxMbps = live.rxMbps;
+      metrics.txMbps = live.txMbps;
+    } catch (e) {
+      extra.trafficError = e.message;
+    }
+  }
+
   if (cfg.tier2) {
     const sfpIfaces = extra.interfaces
-      .filter(i => /sfp|qsfp/i.test(i.name + ' ' + i.type) && i.running)
-      .slice(0, 1);
+      .filter((i) => /sfp|qsfp/i.test(i.name + ' ' + i.type) && i.running)
+      .slice(0, 2);
     for (const iface of sfpIfaces) {
       try {
         const mon = await mt.request('POST', '/interface/ethernet/monitor', {
@@ -273,41 +288,28 @@ async function pollMikrotik(device, cfg) {
         }
       } catch (_) { /* SFP monitor tidak tersedia di semua ether */ }
     }
+
+    const [wifiLegacy, wifiWave] = await Promise.all([
+      _safeGet(mt, '/interface/wireless/registration-table', 4000),
+      _safeGet(mt, '/interface/wifi/registration', 4000),
+    ]);
+    extra.wireless = [
+      ...parseWirelessEntries(wifiLegacy),
+      ...parseWirelessEntries(wifiWave),
+    ].slice(0, 40);
   }
 
   if (cfg.tier3) {
-    const [bgp7, bgp6, ospf, wifi, dhcpSrv, dnsCfg] = await Promise.all([
-      _safeGet(mt, '/routing/bgp/session', 3500),
-      _safeGet(mt, '/routing/bgp/peer', 3500),
-      _safeGet(mt, '/routing/ospf/neighbor', 3500),
-      _safeGet(mt, '/interface/wireless/registration-table', 3500),
+    const [pppRaw, dhcpSrv, dnsCfg] = await Promise.all([
+      _safeGet(mt, '/ppp/active', 8000),
       _safeGet(mt, '/ip/dhcp-server', 3000),
       _safeGet(mt, '/ip/dns', 3000),
     ]);
-    const bgpSrc = Array.isArray(bgp7) && bgp7.length ? bgp7 : (Array.isArray(bgp6) ? bgp6 : []);
-    extra.bgp = bgpSrc.slice(0, 20).map(p => ({
-      name: p.name || p['remote-address'] || p['.id'],
-      remote: p['remote-address'] || p['remote.address'] || '',
-      state: p.established === 'true' || p.established === true
-        ? 'established'
-        : (p.state || p['session-state'] || 'unknown'),
-    }));
-    extra.ospf = (Array.isArray(ospf) ? ospf : []).slice(0, 20).map(n => ({
-      router: n['router-id'] || n.address || '',
-      state: n.state || '',
-      address: n.address || '',
-    }));
-    extra.wireless = (Array.isArray(wifi) ? wifi : []).slice(0, 30).map(w => ({
-      mac: w['mac-address'] || '',
-      interface: w.interface || '',
-      signal: w['signal-strength'] != null ? parseFloat(String(w['signal-strength']).split('d')[0]) : null,
-      ccq: w['tx-ccq'] != null ? parseFloat(w['tx-ccq']) : (w.ccq != null ? parseFloat(w.ccq) : null),
-      noise: w['signal-to-noise'] != null ? parseFloat(w['signal-to-noise']) : null,
-    }));
+    extra.pppoe = pppoeRollup(parsePppoeActive(pppRaw));
     if (Array.isArray(dhcpSrv)) {
       extra.dhcp = {
         servers: dhcpSrv.length,
-        disabled: dhcpSrv.filter(s => flag(s.disabled)).length,
+        disabled: dhcpSrv.filter((s) => mikrotikFlag(s.disabled)).length,
       };
     }
     if (dnsCfg && typeof dnsCfg === 'object' && !Array.isArray(dnsCfg)) {
@@ -360,6 +362,28 @@ async function checkServices() {
     out.radius = { ok: false, detail: e.message || 'Cek RADIUS gagal' };
   }
 
+  try {
+    const { sequelize } = require('../models');
+    const { QueryTypes } = require('sequelize');
+    const rows = await sequelize.query(
+      `SELECT
+         SUM(CASE WHEN pppoe_username IS NOT NULL AND pppoe_username <> '' THEN 1 ELSE 0 END) AS with_pppoe,
+         SUM(CASE WHEN isolir_status = 'isolated' OR status = 'isolated' THEN 1 ELSE 0 END) AS isolated,
+         SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active
+       FROM customers`,
+      { type: QueryTypes.SELECT }
+    );
+    const r = rows && rows[0] ? rows[0] : {};
+    out.pppoe = {
+      withPppoe: num(r.with_pppoe),
+      isolated: num(r.isolated),
+      active: num(r.active),
+      detail: `${num(r.with_pppoe)} akun PPPoE · ${num(r.isolated)} isolir · ${num(r.active)} pelanggan aktif`,
+    };
+  } catch (e) {
+    out.pppoe = { withPppoe: 0, isolated: 0, active: 0, detail: e.message || 'Cek PPPoE/isolir gagal' };
+  }
+
   return out;
 }
 
@@ -383,17 +407,6 @@ function buildAlerts(device, ping, metrics, extra) {
   (extra.sfp || []).forEach(s => {
     if (s.rxPower != null && s.rxPower <= RX_WEAK_DBM) {
       alerts.push({ level: 'warn', msg: `SFP ${s.name} RX ${s.rxPower} dBm` });
-    }
-  });
-  (extra.bgp || []).forEach(p => {
-    if (p.state && String(p.state).toLowerCase() !== 'established') {
-      alerts.push({ level: 'crit', msg: `BGP ${p.name} ${p.state}` });
-    }
-  });
-  (extra.ospf || []).forEach(n => {
-    const st = String(n.state || '').toLowerCase();
-    if (st && st !== 'full' && st !== '2-way') {
-      alerts.push({ level: 'warn', msg: `OSPF ${n.router || n.address} ${n.state}` });
     }
   });
   (extra.wireless || []).forEach(w => {
@@ -457,20 +470,24 @@ async function pollDevice(device, cfg, prev) {
     rxMbps: 0, txMbps: 0, ifaceErrors: 0, ifaceDrops: 0, ifaceDown: 0,
   };
 
-  const canApi = device.type === 'router'
-    || device.monitoring_type === 'api'
-    || device.monitoring_type === 'both'
-    || (device.api_username && device.api_port);
-
-  if (ping.reachable && canApi) {
+  if (canPollMikrotik(device)) {
     const api = await pollMikrotik(device, cfg);
     if (api.ok) {
       extra = { ...extra, ...api.extra };
       metrics = { ...metrics, ...api.metrics };
-      applyTrafficDelta(extra, metrics, prev);
+      if (!(metrics.rxMbps > 0 || metrics.txMbps > 0)) {
+        applyTrafficDelta(extra, metrics, prev);
+      }
+      if (!ping.reachable) {
+        ping.reachable = true;
+        extra.icmpBlocked = true;
+        if (ping.loss == null) ping.loss = 100;
+      }
     } else {
       extra.apiError = api.error;
     }
+  } else {
+    extra.apiError = 'Isi API Username di Device Management agar traffic/CPU/PPPoE terbaca (SNMP saja tidak cukup)';
   }
 
   const alerts = buildAlerts(device, ping, metrics, extra);
@@ -478,6 +495,7 @@ async function pollDevice(device, cfg, prev) {
   extra.deviceName = device.name;
   extra.deviceType = device.type;
   extra.ip = device.ip_address;
+  extra.popId = device.pop_id || null;
 
   return { ping, metrics, extra, alerts, status };
 }
@@ -559,12 +577,16 @@ async function runCycle() {
   const t0 = Date.now();
   try {
     const { Device, NetworkHealthSnapshot, NetworkHealthSample } = require('../models');
+    const { Op } = require('sequelize');
     const devices = await Device.findAll({
-      where: { is_active: true },
-      attributes: ['id', 'name', 'ip_address', 'type', 'monitoring_type',
+      where: {
+        is_active: true,
+        type: { [Op.in]: INFRA_DEVICE_TYPES },
+      },
+      attributes: ['id', 'name', 'ip_address', 'type', 'monitoring_type', 'pop_id',
         'api_username', 'api_password', 'api_port', 'api_protocol'],
       order: [['id', 'ASC']],
-      limit: 40,
+      limit: 60,
     });
 
     const prevRows = await NetworkHealthSnapshot.findAll({
@@ -572,7 +594,7 @@ async function runCycle() {
     });
     const prevMap = new Map(prevRows.map(r => [r.device_id, r]));
 
-    const results = await _mapLimit(devices, 2, async (device) => {
+    const results = await _mapLimit(devices, 3, async (device) => {
       const r = await pollDevice(device, cfg, prevMap.get(device.id));
       const now = new Date();
       await NetworkHealthSnapshot.upsert({
