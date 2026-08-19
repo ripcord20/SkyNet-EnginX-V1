@@ -11,6 +11,9 @@ const INFRA_DEVICE_TYPES = ['router', 'switch', 'olt', 'access_point', 'server']
 
 function canPollMikrotik(device) {
   if (!device) return false;
+  // SNMP-only devices must not be treated as API-capable even if leftover
+  // api_username/port 80 still sit on the row from the add-device form.
+  if (device.monitoring_type === 'snmp') return false;
   const user = String(device.api_username || '').trim();
   if (!user) return false;
   const type = device.type || 'router';

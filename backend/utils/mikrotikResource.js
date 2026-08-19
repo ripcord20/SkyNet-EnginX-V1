@@ -110,6 +110,7 @@ function mapInterfaceRow(i) {
  */
 function isMikrotikApiCapable(device) {
   if (!device) return false;
+  if (device.monitoring_type === 'snmp') return false;
   const type = device.type || 'router';
   if (!['router', 'olt'].includes(type)) return false;
   const user = String(device.api_username || '').trim();

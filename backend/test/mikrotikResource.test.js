@@ -90,6 +90,7 @@ assert.strictEqual(isMikrotikApiCapable({ type: 'router', api_port: 80 }), false
 assert.strictEqual(isMikrotikApiCapable({ type: 'router', monitoring_type: 'api' }), false, 'tanpa username tidak bisa REST');
 assert.strictEqual(isMikrotikApiCapable({ type: 'router', api_username: 'admin' }), true);
 assert.strictEqual(isMikrotikApiCapable({ type: 'router', api_username: '  ' }), false);
+assert.strictEqual(isMikrotikApiCapable({ type: 'router', api_username: 'admin', monitoring_type: 'snmp' }), false);
 
 const snmpOnly = presentNmsRouter({ id: 1, name: 'GANANET', ip_address: '141.11.241.96', type: 'router', api_port: 80, status: 'online' });
 assert.strictEqual(snmpOnly.api_ready, false);

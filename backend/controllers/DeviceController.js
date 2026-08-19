@@ -3,6 +3,7 @@ const { Op } = require('sequelize');
 const { paginateResponse } = require('../utils/helpers');
 const { parseCpuPercent } = require('../utils/mikrotikResource');
 const { unlinkDevice, parseFkTableFromError } = require('../utils/deviceCascade');
+const { sanitizeDevicePayload, wantsApiMonitor, wantsSnmpMonitor } = require('../utils/devicePayload');
 const net = require('net');
 const logger = require('../utils/logger');
 
@@ -105,10 +106,11 @@ class DeviceController {
 
   async create(req, res) {
     try {
-      const device = await Device.create(req.body);
+      const payload = sanitizeDevicePayload(req.body);
+      const device = await Device.create(payload);
       res.status(201).json({ success: true, data: device });
     } catch (error) {
-      res.status(400).json({ success: false, message: error.message });
+      res.status(error.status || 400).json({ success: false, message: error.message });
     }
   }
 
@@ -133,10 +135,16 @@ class DeviceController {
     try {
       const device = await Device.findByPk(req.params.id);
       if (!device) return res.status(404).json({ success: false, message: 'Device not found' });
-      await device.update(req.body);
+      const payload = sanitizeDevicePayload({
+        name: req.body.name != null ? req.body.name : device.name,
+        ip_address: req.body.ip_address != null ? req.body.ip_address : device.ip_address,
+        ...req.body,
+        monitoring_type: req.body.monitoring_type != null ? req.body.monitoring_type : device.monitoring_type,
+      });
+      await device.update(payload);
       res.json({ success: true, data: device });
     } catch (error) {
-      res.status(400).json({ success: false, message: error.message });
+      res.status(error.status || 400).json({ success: false, message: error.message });
     }
   }
 
@@ -539,14 +547,15 @@ async function _probeDevice(cfg) {
   const host = cfg.ip_address;
 
   // ── Step 1: TCP ping (coba beberapa port umum) ──
-  const portsToTry = [
-    parseInt(cfg.api_port) || 80,
-    443,
-    22,
-    parseInt(cfg.snmp_port) || 161
-  ].filter((p, i, arr) => arr.indexOf(p) === i); // unique
+  const useApi = wantsApiMonitor(cfg.monitoring_type);
+  const useSnmp = wantsSnmpMonitor(cfg.monitoring_type);
+  const portsToTry = [];
+  if (useApi) portsToTry.push(parseInt(cfg.api_port, 10) || 80, 443, 22);
+  if (useSnmp) portsToTry.push(parseInt(cfg.snmp_port, 10) || 161);
+  if (!portsToTry.length) portsToTry.push(80, 443, 22, 161);
+  const uniquePorts = portsToTry.filter((p, i, arr) => arr.indexOf(p) === i);
 
-  for (const port of portsToTry) {
+  for (const port of uniquePorts) {
     try {
       const pr = await _tcpPing(host, port, 2500);
       if (pr.reachable) {
@@ -558,14 +567,16 @@ async function _probeDevice(cfg) {
     } catch (_) { /* coba port berikutnya */ }
   }
 
-  if (!result.reachable) {
+  if (!result.reachable && !useSnmp) {
     result.error = `Host ${host} tidak dapat dijangkau`;
     result.checks.push({ step: 'TCP Ping', ok: false, detail: 'All ports timeout / refused' });
     return result;
   }
+  if (!result.reachable) {
+    result.checks.push({ step: 'TCP Ping', ok: false, detail: 'TCP timeout — lanjut cek SNMP (UDP/161)' });
+  }
 
   // ── Step 2: API auth check (MikroTik REST) ──
-  const useApi = ['api', 'both'].includes(cfg.monitoring_type);
   if (useApi && cfg.api_username) {
     try {
       const { MikrotikService } = require('../services/MikrotikService');
@@ -593,7 +604,6 @@ async function _probeDevice(cfg) {
   }
 
   // ── Step 3: SNMP check ──
-  const useSnmp = ['snmp', 'both'].includes(cfg.monitoring_type) || !cfg.monitoring_type;
   if (useSnmp) {
     try {
       const snmp = require('net-snmp');
@@ -628,9 +638,12 @@ async function _probeDevice(cfg) {
 
   // ── Verdict ──
   const authOk = result.checks.some(c => (c.step === 'API Auth' || c.step === 'SNMP') && c.ok);
-  result.success = result.reachable && (authOk || (!useApi && !useSnmp));
+  result.success = authOk || (result.reachable && !useApi && !useSnmp);
+  if (result.success) result.reachable = true;
   if (!result.success && !result.error) {
-    result.error = 'Host tercapai tapi autentikasi SNMP/API gagal';
+    result.error = useApi && !cfg.api_username
+      ? 'API Username wajib diisi untuk metode API / SNMP+API'
+      : 'Host tercapai tapi autentikasi SNMP/API gagal';
   }
 
   return result;

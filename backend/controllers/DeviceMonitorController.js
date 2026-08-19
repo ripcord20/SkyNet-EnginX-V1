@@ -4,12 +4,13 @@
  * Protocol: MikroTik REST API + SNMP v2c/v3
  */
 
-const { Device, DeviceLog, TrafficData, sequelize } = require('../models');
+const { Device, DeviceLog, sequelize } = require('../models');
 const { Op }   = require('sequelize');
 const { getMikrotikInstance } = require('../services/MikrotikService');
 const { SNMP_OIDS } = require('../config/constants');
 const { parseCpuPercent } = require('../utils/mikrotikResource');
 const { readCpuLoad, readMemory, formatSnmpUptime, pickVarbind, snmpText } = require('../utils/snmpMetrics');
+const { sanitizeDevicePayload } = require('../utils/devicePayload');
 
 let snmp;
 try { snmp = require('net-snmp'); } catch(e) {}
@@ -456,43 +457,25 @@ function _getMikrotikDeviceId() { return null; }
 // ─────────────────────────────────────────────────────────────
 exports.createDevice = async (req, res) => {
   try {
-    const {
-      name, ip_address, type, brand, model, location,
-      monitoring_type,
-      // MikroTik API fields
-      api_port, api_username, api_password,
-      // SNMP fields
-      snmp_community, snmp_version, snmp_port,
-      poll_interval, notes
-    } = req.body;
-
-    if (!name || !ip_address) {
-      return res.status(400).json({ success: false, message: 'Nama dan IP Address wajib diisi' });
-    }
-
+    const payload = sanitizeDevicePayload(req.body);
     const device = await Device.create({
-      name,
-      ip_address,
-      type:            type            || 'router',
-      brand:           brand           || null,
-      model:           model           || null,
-      location:        location        || null,
-      monitoring_type: monitoring_type || 'api',
-      api_port:        api_port        || null,
-      api_username:    api_username    || null,
-      api_password:    api_password    || null,
-      snmp_community:  snmp_community  || 'public',
-      snmp_version:    snmp_version    || 2,
-      snmp_port:       snmp_port       || 161,
-      poll_interval:   poll_interval   || 60,
-      notes:           notes           || null,
+      ...payload,
+      type:            payload.type            || 'router',
+      brand:           payload.brand           || null,
+      model:           payload.model           || null,
+      location:        payload.location        || null,
+      snmp_community:  payload.snmp_community  || 'public',
+      snmp_version:    payload.snmp_version    || 2,
+      snmp_port:       payload.snmp_port       || 161,
+      poll_interval:   payload.poll_interval   || 60,
+      notes:           payload.notes           || null,
       is_active:       true,
       status:          'offline'
     });
 
     res.status(201).json({ success: true, data: device, message: 'Device berhasil ditambahkan' });
   } catch(e) {
-    res.status(400).json({ success: false, message: e.message });
+    res.status(e.status || 400).json({ success: false, message: e.message });
   }
 };
 
@@ -503,10 +486,16 @@ exports.updateDevice = async (req, res) => {
   try {
     const device = await Device.findByPk(req.params.id);
     if (!device) return res.status(404).json({ success: false, message: 'Device tidak ditemukan' });
-    await device.update(req.body);
+    const payload = sanitizeDevicePayload({
+      name: req.body.name != null ? req.body.name : device.name,
+      ip_address: req.body.ip_address != null ? req.body.ip_address : device.ip_address,
+      ...req.body,
+      monitoring_type: req.body.monitoring_type != null ? req.body.monitoring_type : device.monitoring_type,
+    });
+    await device.update(payload);
     res.json({ success: true, data: device, message: 'Device berhasil diperbarui' });
   } catch(e) {
-    res.status(400).json({ success: false, message: e.message });
+    res.status(e.status || 400).json({ success: false, message: e.message });
   }
 };
 
@@ -535,7 +524,7 @@ exports.testConnection = async (req, res) => {
   if (!ip_address) return res.status(400).json({ success: false, message: 'IP Address wajib diisi' });
 
   try {
-    const useApi = monitoring_type === 'api' || monitoring_type === 'both' || !monitoring_type;
+    const useApi = monitoring_type === 'api' || monitoring_type === 'both';
 
     if (useApi) {
       const port = parseInt(api_port) || 80;
