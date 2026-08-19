@@ -50,7 +50,7 @@ class BillingController {
           // due_date & status disertakan agar form pembayaran (mobile & desktop)
           // bisa menghitung "jatuh tempo berikutnya" (= due_date + 1 bulan) dan
           // menampilkan kondisi pelanggan tanpa request tambahan.
-          attributes: ['id', 'customer_id', 'name', 'phone', 'email', 'due_date', 'status'],
+          attributes: ['id', 'customer_id', 'name', 'phone', 'email', 'due_date', 'status', 'carry_over_amount'],
           where: search ? { [Op.or]: [
             { name:        { [Op.like]: '%' + search + '%' } },
             { customer_id: { [Op.like]: '%' + search + '%' } }
@@ -72,7 +72,7 @@ class BillingController {
         const byInv = await Invoice.findAndCountAll({
           where: invWhere,
           include: [
-            { model: Customer, as: 'customer', attributes: ['id','customer_id','name','phone','email'], required: false },
+            { model: Customer, as: 'customer', attributes: ['id','customer_id','name','phone','email','due_date','status','carry_over_amount'], required: false },
             { model: Payment, as: 'payments', attributes: ['id','amount','payment_method','payment_date','reference_number','gateway','notes'], required: false, limit: 1, order: [['payment_date','DESC']] }
           ],
           offset: (page-1)*limit, limit: parseInt(limit), order: [['due_date','ASC'],['created_at','DESC']]

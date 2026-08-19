@@ -8,6 +8,7 @@ let _selCust    = null;
 let _searchTimer= null;
 let _payQueue   = [];   // [{id,name,cid,phone,billingDay,price,pkgName,dueDate,amount,paid,checked,debt}]
 let _lastCustHits = [];
+let _dueDurKind = '1m';
 const MONTHS = ['','Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 const METHOD_COLORS = { cash:'#059669',transfer:'#2563eb',dana:'#0ea5e9',ovo:'#1d4ed8',gopay:'#16a34a',qris:'#d97706',field_collection:'#0d9488' };
 let _proofRows = [];
@@ -128,32 +129,90 @@ function toYmd(date) {
   return `${y}-${m}-${d}`;
 }
 
+function startOfToday() {
+  const t = new Date();
+  t.setHours(0, 0, 0, 0);
+  return t;
+}
+
+function addDaysKeep(date, days) {
+  const d = new Date(date.getTime());
+  d.setDate(d.getDate() + (parseInt(days, 10) || 0));
+  return d;
+}
+
+// Default jatuh tempo berdasarkan cakupan bayar (1/2/3 bulan).
+//   • Ada due_date pelanggan: due_date + N bulan (hari tetap, di-clamp).
+//   • Tidak ada: billing_date pada bulan berjalan/berikutnya, lalu + (N-1).
+function defaultMonthDueDate(billingDay, customerDueDate) {
+  const months = getPayMonths();
+  if (customerDueDate) {
+    const base = new Date(String(customerDueDate).slice(0, 10) + 'T00:00:00');
+    if (!isNaN(base.getTime())) return addMonthsKeepDay(base, months);
+  }
+  const today = startOfToday();
+  const bd = parseInt(billingDay, 10) || 1;
+  let m = today.getMonth(), y = today.getFullYear();
+  const thisMonthDue = new Date(y, m, bd);
+  if (today >= thisMonthDue) { m++; if (m > 11) { m = 0; y++; } }
+  const first = new Date(y, m, bd);
+  return months > 1 ? addMonthsKeepDay(first, months - 1) : first;
+}
+
+// Quick-select: +3/+7/+15 hari dari jatuh tempo (atau dari hari ini jika sudah lewat).
+// +1 bulan mengikuti defaultMonthDueDate (selaras cakupan 1/2/3 bulan).
+function nextDueDateValue(c, kind) {
+  const k = kind || '1m';
+  if (k === '3d' || k === '7d' || k === '15d') {
+    const days = k === '3d' ? 3 : k === '7d' ? 7 : 15;
+    const today = startOfToday();
+    let base = today;
+    if (c && c.dueDate) {
+      const d = new Date(String(c.dueDate).slice(0, 10) + 'T00:00:00');
+      if (!isNaN(d.getTime()) && d >= today) base = d;
+    }
+    return toYmd(addDaysKeep(base, days));
+  }
+  return toYmd(defaultMonthDueDate(c && c.billingDay, c && c.dueDate));
+}
+
+function markDueDurationChip(kind) {
+  document.querySelectorAll('#dueDurGrid .dpill').forEach(p => {
+    p.classList.toggle('active', p.dataset.dur === kind);
+  });
+}
+
+window.onDueDateManual = function() {
+  _dueDurKind = null;
+  markDueDurationChip(null);
+};
+
+window.selectDueDuration = function(kind, el) {
+  const c = _selCust || payableQueue()[0] || null;
+  const elDate = document.getElementById('payDueDate');
+  if (!elDate) return;
+  _dueDurKind = kind;
+  elDate.value = nextDueDateValue(c, kind);
+  if (el) {
+    document.querySelectorAll('#dueDurGrid .dpill').forEach(p => p.classList.remove('active'));
+    el.classList.add('active');
+  } else {
+    markDueDurationChip(kind);
+  }
+};
+
 // Hitung default "Jatuh Tempo Baru".
 //   • Jika customerDueDate (jatuh tempo asli tersimpan di data customer) ada:
-//       default = jatuh tempo asli + 1 bulan  (mis. 1 Mei -> 1 Juni)
+//       default = jatuh tempo asli + N bulan  (mis. 1 Mei -> 1 Juni)
 //   • Jika tidak ada: fallback ke billing_date pada bulan berikutnya dari hari ini.
 // Field tetap editable — admin bisa override.
 function setDefaultDueDate(billingDay, customerDueDate) {
   const el = document.getElementById('payDueDate');
   if (!el) return;
   const months = getPayMonths();
-
-  if (customerDueDate) {
-    const base = new Date(customerDueDate + 'T00:00:00');
-    if (!isNaN(base.getTime())) {
-      el.value = toYmd(addMonthsKeepDay(base, months));
-      return;
-    }
-  }
-
-  // Fallback: pakai billing_date, ambil bulan depan dari hari ini, lalu + (N-1).
-  const today = new Date();
-  const bd = parseInt(billingDay) || 1;
-  let m = today.getMonth(), y = today.getFullYear();
-  const thisMonthDue = new Date(y, m, bd);
-  if (today >= thisMonthDue) { m++; if (m > 11) { m = 0; y++; } }
-  const first = new Date(y, m, bd);
-  el.value = toYmd(months > 1 ? addMonthsKeepDay(first, months - 1) : first);
+  el.value = toYmd(defaultMonthDueDate(billingDay, customerDueDate));
+  markDueDurationChip(months === 1 ? '1m' : null);
+  _dueDurKind = months === 1 ? '1m' : null;
 }
 
 // ── STATS ─────────────────────────────────────────────────────
@@ -423,18 +482,7 @@ function queueTotal() {
 }
 
 function nextDueForCustomer(c) {
-  const months = getPayMonths();
-  if (c && c.dueDate) {
-    const base = new Date(c.dueDate + 'T00:00:00');
-    if (!isNaN(base.getTime())) return toYmd(addMonthsKeepDay(base, months));
-  }
-  const today = new Date();
-  const bd = parseInt(c && c.billingDay, 10) || 1;
-  let m = today.getMonth(), y = today.getFullYear();
-  const thisMonthDue = new Date(y, m, bd);
-  if (today >= thisMonthDue) { m++; if (m > 11) { m = 0; y++; } }
-  const first = new Date(y, m, bd);
-  return toYmd(months > 1 ? addMonthsKeepDay(first, months - 1) : first);
+  return nextDueDateValue(c, _dueDurKind);
 }
 
 function renderPayQueue() {
