@@ -9,7 +9,7 @@
  *
  * Tier 1: ICMP RTT/loss, up/down, traffic interface
  * Tier 2: CPU/RAM/disk, suhu/tegangan, optik SFP + ringkasan ONT
- * Tier 3: BGP/OSPF, error/CRC port, DHCP/DNS/RADIUS, flow lite (conntrack)
+ * Tier 3: sesi PPPoE (bukan BGP), error/CRC port, DHCP/DNS/RADIUS, flow lite
  */
 
 const { exec } = require('child_process');
@@ -23,7 +23,8 @@ const {
   normalizeIfaces,
   pickTrafficIfaces,
   trafficMbpsFromStats,
-  mergeBgpSources,
+  parsePppoeActive,
+  pppoeRollup,
   parseWirelessEntries,
 } = require('../utils/networkHealthMetrics');
 
@@ -189,8 +190,7 @@ async function pollMikrotik(device, cfg) {
     uptime: null,
     interfaces: [],
     trafficIfaces: [],
-    bgp: [],
-    ospf: [],
+    pppoe: { active: 0, sample: [] },
     wireless: [],
     sfp: [],
     dhcp: null,
@@ -300,28 +300,12 @@ async function pollMikrotik(device, cfg) {
   }
 
   if (cfg.tier3) {
-    const [bgpSession, bgpPeer, bgpConn, ospf, dhcpSrv, dnsCfg] = await Promise.all([
-      _safeGet(mt, '/routing/bgp/session', 6000),
-      _safeGet(mt, '/routing/bgp/peer', 6000),
-      _safeGet(mt, '/routing/bgp/connection', 6000),
-      _safeGet(mt, '/routing/ospf/neighbor', 4000),
+    const [pppRaw, dhcpSrv, dnsCfg] = await Promise.all([
+      _safeGet(mt, '/ppp/active', 8000),
       _safeGet(mt, '/ip/dhcp-server', 3000),
       _safeGet(mt, '/ip/dns', 3000),
     ]);
-    extra.bgp = mergeBgpSources(bgpSession, bgpPeer, bgpConn);
-    extra.bgpProbed = {
-      session: Array.isArray(bgpSession) ? bgpSession.length : (bgpSession ? 1 : 0),
-      peer: Array.isArray(bgpPeer) ? bgpPeer.length : (bgpPeer ? 1 : 0),
-      connection: Array.isArray(bgpConn) ? bgpConn.length : (bgpConn ? 1 : 0),
-    };
-    if (!extra.bgp.length) {
-      extra.bgpNote = 'Tidak ada sesi BGP di router ini. RouterOS v7: /routing/bgp/session · v6: /routing/bgp/peer.';
-    }
-    extra.ospf = (Array.isArray(ospf) ? ospf : []).slice(0, 20).map((n) => ({
-      router: n['router-id'] || n.address || '',
-      state: n.state || '',
-      address: n.address || '',
-    }));
+    extra.pppoe = pppoeRollup(parsePppoeActive(pppRaw));
     if (Array.isArray(dhcpSrv)) {
       extra.dhcp = {
         servers: dhcpSrv.length,
@@ -378,6 +362,28 @@ async function checkServices() {
     out.radius = { ok: false, detail: e.message || 'Cek RADIUS gagal' };
   }
 
+  try {
+    const { sequelize } = require('../models');
+    const { QueryTypes } = require('sequelize');
+    const rows = await sequelize.query(
+      `SELECT
+         SUM(CASE WHEN pppoe_username IS NOT NULL AND pppoe_username <> '' THEN 1 ELSE 0 END) AS with_pppoe,
+         SUM(CASE WHEN isolir_status = 'isolated' OR status = 'isolated' THEN 1 ELSE 0 END) AS isolated,
+         SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active
+       FROM customers`,
+      { type: QueryTypes.SELECT }
+    );
+    const r = rows && rows[0] ? rows[0] : {};
+    out.pppoe = {
+      withPppoe: num(r.with_pppoe),
+      isolated: num(r.isolated),
+      active: num(r.active),
+      detail: `${num(r.with_pppoe)} akun PPPoE · ${num(r.isolated)} isolir · ${num(r.active)} pelanggan aktif`,
+    };
+  } catch (e) {
+    out.pppoe = { withPppoe: 0, isolated: 0, active: 0, detail: e.message || 'Cek PPPoE/isolir gagal' };
+  }
+
   return out;
 }
 
@@ -401,18 +407,6 @@ function buildAlerts(device, ping, metrics, extra) {
   (extra.sfp || []).forEach(s => {
     if (s.rxPower != null && s.rxPower <= RX_WEAK_DBM) {
       alerts.push({ level: 'warn', msg: `SFP ${s.name} RX ${s.rxPower} dBm` });
-    }
-  });
-  (extra.bgp || []).forEach(p => {
-    const st = String(p.state || '').toLowerCase();
-    if (st && st !== 'established' && st !== 'configured') {
-      alerts.push({ level: 'crit', msg: `BGP ${p.name} ${p.state}` });
-    }
-  });
-  (extra.ospf || []).forEach(n => {
-    const st = String(n.state || '').toLowerCase();
-    if (st && st !== 'full' && st !== '2-way') {
-      alerts.push({ level: 'warn', msg: `OSPF ${n.router || n.address} ${n.state}` });
     }
   });
   (extra.wireless || []).forEach(w => {
@@ -493,7 +487,7 @@ async function pollDevice(device, cfg, prev) {
       extra.apiError = api.error;
     }
   } else {
-    extra.apiError = 'Isi API Username di Device Management agar traffic/CPU/BGP terbaca (SNMP saja tidak cukup)';
+    extra.apiError = 'Isi API Username di Device Management agar traffic/CPU/PPPoE terbaca (SNMP saja tidak cukup)';
   }
 
   const alerts = buildAlerts(device, ping, metrics, extra);

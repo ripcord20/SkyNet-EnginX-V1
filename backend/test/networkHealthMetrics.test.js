@@ -6,9 +6,8 @@ const {
   normalizeIfaces,
   pickTrafficIfaces,
   trafficMbpsFromStats,
-  parseBgpEntries,
-  mergeBgpSources,
-  bgpSummary,
+  parsePppoeActive,
+  pppoeRollup,
   parseWirelessEntries,
   INFRA_DEVICE_TYPES,
 } = require('../utils/networkHealthMetrics');
@@ -46,34 +45,17 @@ const live = trafficMbpsFromStats([
 assert.strictEqual(live.rxMbps, 15);
 assert.strictEqual(live.txMbps, 3);
 
-const ros7 = parseBgpEntries([
-  { name: 'upstream', 'remote.address': '1.2.3.4', established: true },
-  { name: 'peer2', 'remote.address': '5.6.7.8', established: 'yes' },
+const sessions = parsePppoeActive([
+  { name: 'pelanggan-01', service: 'pppoe', address: '10.10.0.2', uptime: '1h', 'caller-id': 'AA:BB' },
+  { name: '', address: '10.10.0.3' },
+  { name: 'pelanggan-02', interface: '<pppoe-pelanggan-02>' },
 ]);
-assert.strictEqual(ros7.length, 2);
-assert.strictEqual(ros7[0].state, 'established');
-assert.strictEqual(ros7[0].remote, '1.2.3.4');
-assert.strictEqual(ros7[1].state, 'established', 'binary API established=yes');
-
-const ros6 = parseBgpEntries([
-  { name: 'peer-a', 'remote-address': '9.9.9.9', state: 'established' },
-  { name: 'peer-b', 'remote-address': '8.8.8.8', state: 'idle' },
-]);
-assert.strictEqual(ros6[0].state, 'established');
-assert.strictEqual(ros6[1].state, 'idle');
-
-const merged = mergeBgpSources(null, ros6, [{ name: 'cfg-only', 'remote.address': '1.1.1.1' }]);
-assert.strictEqual(merged.length, 2, 'peer menang dari connection');
-
-const onlyConn = mergeBgpSources(null, null, [{ name: 'cfg-only', 'remote.address': '1.1.1.1' }]);
-assert.strictEqual(onlyConn[0].state, 'configured');
-
-const sum = bgpSummary([...ros7, { name: 'down', state: 'idle' }]);
-assert.strictEqual(sum.total, 3);
-assert.strictEqual(sum.up, 2);
-assert.strictEqual(sum.down, 1);
-
-assert.strictEqual(bgpSummary([]).total, 0);
+assert.strictEqual(sessions.length, 2);
+assert.strictEqual(sessions[0].address, '10.10.0.2');
+const roll = pppoeRollup(sessions);
+assert.strictEqual(roll.active, 2);
+assert.deepStrictEqual(roll.sample, ['pelanggan-01', 'pelanggan-02']);
+assert.strictEqual(pppoeRollup([]).active, 0);
 
 const wifi = parseWirelessEntries([
   { 'mac-address': 'AA:BB', interface: 'wlan1', 'signal-strength': '-65dBm@1Mbps', 'tx-ccq': '90' },

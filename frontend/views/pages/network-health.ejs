@@ -93,7 +93,7 @@
     .chip { display:inline-block; font-size:10px; font-weight:700; padding:1px 6px; border-radius:6px; background:#f1f5f9; color:#475569; }
     .alerts { color:var(--nh-warn); font-size:11px; max-width:220px; }
 
-    .nh-svc { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; padding:14px 16px; }
+    .nh-svc { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; padding:14px 16px; }
     .svc { border:1px solid var(--nh-border); border-radius:10px; padding:10px 12px; }
     .svc b { display:block; font-size:12px; margin-bottom:4px; }
     .svc p { margin:0; font-size:11px; color:var(--nh-muted); line-height:1.45; }
@@ -129,7 +129,7 @@
             </div>
             <div>
               <h1>Network Health Monitor</h1>
-              <p>Latensi, packet loss, perangkat, traffic, CPU/RAM, optik, BGP &amp; layanan — default OFF agar billing tetap ringan</p>
+              <p>Latensi, packet loss, perangkat, traffic, CPU/RAM, optik, sesi PPPoE, isolir &amp; layanan — default OFF agar billing tetap ringan</p>
             </div>
           </div>
           <div class="nh-hdr-r">
@@ -158,7 +158,7 @@
               Tidak ada ping, SNMP, atau query MikroTik tambahan. Invoice, isolir, dan pembayaran
               tidak terpengaruh. Nyalakan tombol <b>ON</b> hanya jika ingin memantau kualitas jaringan.
             </p>
-            <p style="margin-bottom:0">Yang akan dipantau: RTT &amp; packet loss, up/down perangkat, traffic uplink, CPU/RAM/suhu, optik SFP &amp; ONT, BGP/OSPF, error port, DNS/RADIUS, dan flow lite (bukan NetFlow penuh).</p>
+            <p style="margin-bottom:0">Yang akan dipantau: RTT &amp; packet loss, up/down perangkat, traffic uplink, CPU/RAM/suhu, optik SFP &amp; ONT, sesi PPPoE, isolir, error port, DNS/RADIUS, dan flow lite.</p>
           </div>
         </div>
 
@@ -192,10 +192,10 @@
               </ul>
             </div>
             <div class="nh-tier">
-              <h3><span class="nh-badge t3">Tier 3</span> Protokol &amp; port</h3>
-              <p class="nh-tier-note">Sesi BGP/OSPF, error port, DNS/RADIUS, dan snapshot connection-tracking.</p>
+              <h3><span class="nh-badge t3">Tier 3</span> Layanan pelanggan</h3>
+              <p class="nh-tier-note">Sesi PPPoE, isolir, error port, DNS/RADIUS, dan snapshot connection-tracking — selaras modul PPPoE &amp; Isolir.</p>
               <ul>
-                <li>BGP <span id="t3bgp" class="mute">—</span></li>
+                <li>Sesi PPPoE aktif <span id="t3pppoe" class="mute">—</span></li>
                 <li>Port error / drop <span id="t3err" class="mute">—</span></li>
                 <li>DNS / RADIUS <span id="t3svc" class="mute">—</span></li>
                 <li>Flow lite (conntrack) <span id="t3flow" class="mute">—</span></li>
@@ -228,6 +228,7 @@
             <div class="nh-svc">
               <div class="svc"><b>DNS</b><p id="svcDns">—</p></div>
               <div class="svc"><b>RADIUS AAA</b><p id="svcRadius">—</p></div>
+              <div class="svc"><b>PPPoE / Isolir</b><p id="svcPppoe">—</p></div>
               <div class="svc"><b>Optik ONT</b><p id="svcOnt">—</p></div>
             </div>
             <p class="nh-hint" id="flowHint"></p>
@@ -351,8 +352,8 @@ const NH = {
     set('t2opt', (s.opticalWeak||0) + ' lemah', s.opticalWeak ? 'warn' : 'ok');
     const wifiN = (d.devices||[]).reduce((a,x)=>a+((x.details&&x.details.wireless)||[]).length,0);
     set('t2wifi', wifiN + ' klien', 'ok');
-    if (!s.bgpTotal) set('t3bgp', 'tidak ada sesi', 'mute');
-    else set('t3bgp', (s.bgpUp||0) + ' established / ' + (s.bgpDown||0) + ' down', s.bgpDown ? 'crit' : 'ok');
+    if (!s.pppoeActive) set('t3pppoe', '0 sesi', 'mute');
+    else set('t3pppoe', (s.pppoeActive||0) + ' sesi', 'ok');
     set('t3err', (s.errorPorts||0) + ' port', s.errorPorts ? 'warn' : 'ok');
 
     const svc = d.services || {};
@@ -362,6 +363,9 @@ const NH = {
       ? ((dns.ok ? 'OK' : 'Gagal') + ' · ' + (dns.ms||0) + ' ms · ' + (dns.detail||''))
       : 'Belum dicek';
     document.getElementById('svcRadius').textContent = rad ? (rad.detail || '—') : 'Belum dicek';
+    const pppoeSvc = svc.pppoe;
+    const pppoeEl = document.getElementById('svcPppoe');
+    if (pppoeEl) pppoeEl.textContent = pppoeSvc ? (pppoeSvc.detail || '—') : 'Belum dicek';
     const ont = svc.optical;
     document.getElementById('svcOnt').textContent = ont
       ? (ont.online + ' online / ' + ont.offline + ' offline · ' + ont.weak + ' sinyal lemah')
@@ -393,15 +397,13 @@ const NH = {
     }
     tb.innerHTML = rows.map(r => {
       const al = (r.alerts||[]).map(a => a.msg).join(' · ');
-      const apiHint = r.apiReady ? '' : '<div style="color:#b45309;font-size:10px;font-weight:700;margin-top:2px">API username belum diisi — traffic/CPU/BGP tidak terbaca</div>';
+      const apiHint = r.apiReady ? '' : '<div style="color:#b45309;font-size:10px;font-weight:700;margin-top:2px">API username belum diisi — traffic/CPU/PPPoE tidak terbaca</div>';
       const errHint = (r.details && r.details.apiError) ? '<div style="color:#dc2626;font-size:10px;margin-top:2px">' + this.esc(r.details.apiError) + '</div>' : '';
-      const bgpN = ((r.details && r.details.bgp) || []).length;
-      const bgpHint = bgpN ? (' · BGP ' + bgpN) : '';
-      const bgpNote = (!bgpN && r.type === 'router' && r.details && r.details.bgpNote)
-        ? '<div style="color:#64748b;font-size:10px;margin-top:2px">' + this.esc(r.details.bgpNote) + '</div>' : '';
+      const pppoeN = Number(r.details && r.details.pppoe && r.details.pppoe.active) || 0;
+      const pppoeHint = pppoeN ? (' · PPPoE ' + pppoeN + ' sesi') : '';
       const ifaces = ((r.details && r.details.trafficIfaces) || []).join(', ');
       return '<tr>'
-        + '<td><b>' + this.esc(r.name||'') + '</b><div class="mono" style="color:var(--nh-muted)">' + this.esc(r.ip||'') + ' · ' + this.esc(r.type||'') + bgpHint + '</div>' + apiHint + errHint + bgpNote + '</td>'
+        + '<td><b>' + this.esc(r.name||'') + '</b><div class="mono" style="color:var(--nh-muted)">' + this.esc(r.ip||'') + ' · ' + this.esc(r.type||'') + pppoeHint + '</div>' + apiHint + errHint + '</td>'
         + '<td>' + (r.pop && r.pop.name ? this.esc(r.pop.name) : '<span class="mute">—</span>') + '</td>'
         + '<td><span class="st ' + this.esc(r.status||'unknown') + '">' + this.esc(r.status||'unknown') + '</span></td>'
         + '<td class="mono">' + this.fmtMs(r.rttAvg) + '</td>'

@@ -2,7 +2,7 @@
 
 /**
  * Parser murni untuk Network Health Monitor (tanpa I/O).
- * Dipakai collector + tes supaya BGP / traffic / filter device tidak “diam-diam kosong”.
+ * Dipakai collector + tes supaya PPPoE / traffic / filter device tidak kosong.
  */
 
 const { mikrotikFlag, mapInterfaceRow } = require('./mikrotikResource');
@@ -53,46 +53,23 @@ function trafficMbpsFromStats(stats) {
   return { rxMbps: parseFloat(rx.toFixed(3)), txMbps: parseFloat(tx.toFixed(3)) };
 }
 
-function parseBgpEntries(rawList) {
-  return asList(rawList).slice(0, 30).map((p) => {
-    const established = mikrotikFlag(p.established);
-    const stateRaw = p.state || p['session-state'] || p['bgp-state'] || '';
-    let state;
-    if (established) state = 'established';
-    else if (stateRaw) state = String(stateRaw).toLowerCase();
-    else state = 'unknown';
-    return {
-      name: p.name || p['remote-address'] || p['remote.address'] || p['.id'] || '',
-      remote: p['remote-address'] || p['remote.address'] || p.remote || '',
-      as: String(p['remote-as'] || p['remote.as'] || ''),
-      state,
-    };
-  }).filter((p) => p.name || p.remote);
+function parsePppoeActive(rawList) {
+  return asList(rawList).map((r) => ({
+    name: r.name || '',
+    service: r.service || 'pppoe',
+    address: r.address || '',
+    uptime: r.uptime || '',
+    callerId: r['caller-id'] || '',
+    interface: r.interface || '',
+  })).filter((s) => s.name);
 }
 
-function mergeBgpSources(session, peer, connection) {
-  const fromSession = parseBgpEntries(session);
-  if (fromSession.length) return fromSession;
-  const fromPeer = parseBgpEntries(peer);
-  if (fromPeer.length) return fromPeer;
-  return parseBgpEntries(connection).map((p) => ({
-    ...p,
-    state: (p.state && p.state !== 'unknown') ? p.state : 'configured',
-  }));
-}
-
-function bgpSummary(entries) {
-  const list = entries || [];
-  let up = 0;
-  let down = 0;
-  let configured = 0;
-  list.forEach((p) => {
-    const st = String(p.state || '').toLowerCase();
-    if (st === 'established') up += 1;
-    else if (st === 'configured') configured += 1;
-    else down += 1;
-  });
-  return { total: list.length, up, down, configured };
+function pppoeRollup(sessions) {
+  const list = sessions || [];
+  return {
+    active: list.length,
+    sample: list.slice(0, 8).map((s) => s.name),
+  };
 }
 
 function parseWirelessEntries(rawList) {
@@ -114,8 +91,7 @@ module.exports = {
   normalizeIfaces,
   pickTrafficIfaces,
   trafficMbpsFromStats,
-  parseBgpEntries,
-  mergeBgpSources,
-  bgpSummary,
+  parsePppoeActive,
+  pppoeRollup,
   parseWirelessEntries,
 };

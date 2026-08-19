@@ -3,7 +3,7 @@
 const Collector = require('../services/NetworkHealthCollector');
 const { NetworkHealthSnapshot, NetworkHealthSample, Device, InfrastructurePoint } = require('../models');
 const { Op } = require('sequelize');
-const { INFRA_DEVICE_TYPES, bgpSummary } = require('../utils/networkHealthMetrics');
+const { INFRA_DEVICE_TYPES } = require('../utils/networkHealthMetrics');
 
 exports.status = async (req, res) => {
   try {
@@ -165,7 +165,7 @@ function emptySummary() {
   return {
     total: 0, online: 0, offline: 0, warning: 0, unknown: 0,
     avgRtt: null, maxLoss: 0, cpuHot: 0, opticalWeak: 0,
-    bgpDown: 0, bgpUp: 0, bgpTotal: 0, errorPorts: 0,
+    pppoeActive: 0, errorPorts: 0,
     rxMbps: 0, txMbps: 0,
   };
 }
@@ -185,10 +185,7 @@ function buildSummary(devices, services) {
     if ((d.ifaceErrors || 0) > 0) s.errorPorts += 1;
     s.rxMbps += Number(d.rxMbps) || 0;
     s.txMbps += Number(d.txMbps) || 0;
-    const bgp = bgpSummary((d.details && d.details.bgp) || []);
-    s.bgpDown += bgp.down;
-    s.bgpUp += bgp.up;
-    s.bgpTotal += bgp.total;
+    s.pppoeActive += Number(d.details && d.details.pppoe && d.details.pppoe.active) || 0;
     (d.details && d.details.sfp || []).forEach(f => {
       if (f.rxPower != null && f.rxPower <= -27) s.opticalWeak += 1;
     });
