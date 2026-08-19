@@ -100,6 +100,11 @@ const TrafficPage = {
     this.buf    = { rx:[], tx:[], ts:[] };
     this.bufPer = {};
     this.lastPush = 0;
+    this._lastSocket = 0;
+    this._pollInFlight = false;
+    if (this._sock && this._sock.connected) {
+      try { this._sock.emit('interface:stop_monitor'); } catch (_) {}
+    }
     if (this.apexChart) {
       try { this.apexChart.destroy(); } catch(_) {}
       this.apexChart = null;
