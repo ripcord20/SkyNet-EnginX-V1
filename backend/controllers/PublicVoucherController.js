@@ -21,6 +21,7 @@ const PublicVoucherService = require('../services/PublicVoucherService');
 const PublicPaymentService = require('../services/PublicPaymentService');
 const PublicVoucherWebhook = require('./PublicVoucherWebhookController');
 const logger = require('../utils/logger');
+const { isValidVoucherOrderCode } = require('../utils/cryptoSafe');
 
 // Helper: base URL absolut (untuk callback/return gateway).
 function baseUrlOf(req) {
@@ -111,9 +112,17 @@ exports.renderLanding = async (req, res, next) => {
 // ── GET /beli-voucher/status/:code — halaman status order ───────────────────
 exports.renderStatus = async (req, res, next) => {
   try {
+    const code = String(req.params.code || '');
+    if (!isValidVoucherOrderCode(code)) {
+      return res.status(400).render('pages/beli-voucher-status', {
+        title: 'Status Order',
+        brand: await loadBrand(),
+        orderCode: ''
+      });
+    }
     const brand = await loadBrand();
     res.render('pages/beli-voucher-status', {
-      title: `Status Order — ${brand.name}`, brand, orderCode: req.params.code
+      title: `Status Order — ${brand.name}`, brand, orderCode: code
     });
   } catch (e) { next(e); }
 };
@@ -183,7 +192,7 @@ exports.createOrder = async (req, res) => {
 
 // Helper: resolve order pending dari :code.
 async function findPendingOrder(code) {
-  if (!code) return null;
+  if (!isValidVoucherOrderCode(code)) return null;
   return PublicVoucherOrder.findOne({ where: { order_code: String(code).trim() } });
 }
 
@@ -247,6 +256,9 @@ exports.submitProof = async (req, res) => {
 // ── GET /pub/voucher/:code/status — polling status ──────────────────
 exports.status = async (req, res) => {
   try {
+    if (!isValidVoucherOrderCode(req.params.code)) {
+      return res.status(400).json({ success: false, message: 'Kode tidak valid' });
+    }
     const order = await PublicVoucherOrder.findOne({ where: { order_code: String(req.params.code || '').trim() } });
     if (!order) return res.status(404).json({ success: false, message: 'Order tidak ditemukan' });
 

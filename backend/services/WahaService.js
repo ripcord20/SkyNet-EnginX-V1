@@ -444,6 +444,13 @@ function mapStatus(wahaStatus) {
 // balapan cek idempotensi → row tersimpan dobel di CRM. Cukup 'message.any'.
 const WAHA_WEBHOOK_EVENTS = ['message.any', 'message.ack', 'message.revoked', 'session.status'];
 
+function webhookConfig(session, webhookUrl) {
+  const apiKey = String(session && session.waha_api_key || '').trim();
+  const entry = { url: webhookUrl, events: WAHA_WEBHOOK_EVENTS.slice() };
+  if (apiKey) entry.customHeaders = { 'X-Api-Key': apiKey };
+  return entry;
+}
+
 // Pastikan session yang SUDAH ADA punya config webhook lengkap (termasuk
 // 'message.ack'). Session lama yang dibuat sebelum fitur ack tidak berlangganan
 // event itu, sehingga WAHA tak pernah mengirim update centang. Fungsi ini
@@ -465,14 +472,18 @@ async function ensureWebhookConfig(session) {
       // Session lama mungkin masih berlangganan 'message' (selain 'message.any').
       // Itu menyebabkan pesan masuk dobel — paksa update config utk membuangnya.
       const hasStale = ev.includes('message');
-      if (hasAll && !hasStale) return true; // sudah lengkap & bersih
+      const headers = mine.customHeaders || mine.headers || {};
+      const sentKey = headers['X-Api-Key'] || headers['x-api-key'] || '';
+      const wantsKey = !!cfg.apiKey;
+      const hasKey = !wantsKey || String(sentKey) === String(cfg.apiKey);
+      if (hasAll && !hasStale && hasKey) return true; // sudah lengkap & bersih
     }
   } catch (_) { /* lanjut update */ }
 
   // Update config webhook (PUT). Sebagian versi WAHA memakai PUT /api/sessions/{name}.
   try {
     await http.put('/api/sessions/' + encodeURIComponent(cfg.wahaSession), {
-      config: { webhooks: [{ url: webhookUrl, events: WAHA_WEBHOOK_EVENTS.slice() }] },
+      config: { webhooks: [webhookConfig(session, webhookUrl)] },
     });
     logger.info('[WAHA] Webhook config di-update utk "' + cfg.wahaSession + '" (incl. message.ack).');
     return true;
@@ -506,10 +517,7 @@ async function startSession(session) {
   const webhooks = [];
   const appUrl = String(process.env.APP_URL || process.env.BASE_URL || '').trim().replace(/\/+$/, '');
   if (appUrl) {
-    webhooks.push({
-      url: appUrl + '/portal/webhook/waha',
-      events: WAHA_WEBHOOK_EVENTS.slice(),
-    });
+    webhooks.push(webhookConfig(session, appUrl + '/portal/webhook/waha'));
   } else {
     logger.warn('[WAHA] APP_URL kosong — session dibuat TANPA webhook. Set APP_URL di .env agar pesan masuk & status realtime.');
   }

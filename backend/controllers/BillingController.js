@@ -3,6 +3,7 @@ const { Op } = require('sequelize');
 const { generateInvoiceNumber, paginateResponse, formatCurrency } = require('../utils/helpers');
 const moment = require('moment');
 const { getCompanyName } = require('../utils/companyInfo');
+const logger = require('../utils/logger');
 
 /**
  * Status customer yang berhak menerima invoice generate bulanan.
@@ -356,25 +357,37 @@ class BillingController {
       let retries = 0;
       while (!invoiceCreated && retries < 8) {
         try {
-          await Invoice.create({
-            invoice_number: generateInvoiceNumber(targetYear, targetMonth, seqCounter, invPrefix),
-            customer_id: customer.id,
-            amount, tax, total,
-            status: 'unpaid',
-            due_date: dueDate.format('YYYY-MM-DD'),
-            period_month: targetMonth,
-            period_year:  targetYear,
-            notes: carryOver > 0 ? `Termasuk tunggakan sebelumnya Rp${carryOver.toLocaleString('id-ID')}` : null
+          await sequelize.transaction(async (t) => {
+            await Invoice.create({
+              invoice_number: generateInvoiceNumber(targetYear, targetMonth, seqCounter, invPrefix),
+              customer_id: customer.id,
+              amount, tax, total,
+              status: 'unpaid',
+              due_date: dueDate.format('YYYY-MM-DD'),
+              period_month: targetMonth,
+              period_year:  targetYear,
+              notes: carryOver > 0 ? `Termasuk tunggakan sebelumnya Rp${carryOver.toLocaleString('id-ID')}` : null
+            }, { transaction: t });
+            // Reset carry-over in the same transaction so a failed reset
+            // cannot leave arrears on the customer AND on the new invoice.
+            if (carryOver > 0) {
+              await customer.update({ carry_over_amount: 0 }, { transaction: t });
+            }
           });
           invoiceCreated = true;
-          // Reset carry-over pelanggan setelah berhasil dimasukkan ke invoice baru.
-          if (carryOver > 0) {
-            try { await customer.update({ carry_over_amount: 0 }); } catch (_) {}
-          }
           seqCounter++;
           created++;
         } catch (createErr) {
           if (createErr.name === 'SequelizeUniqueConstraintError') {
+            const fields = createErr.fields || {};
+            const msg = String(createErr.parent?.sqlMessage || createErr.message || '');
+            const isPeriodDup = fields.customer_id || fields.period_month
+              || /uniq_invoice_customer_period/i.test(msg);
+            if (isPeriodDup && !fields.invoice_number) {
+              skipped++; skippedExisting++;
+              invoiceCreated = true;
+              break;
+            }
             // Resync nomor dari DB (ambil MAX suffix terkini di periode ini),
             // lalu coba lagi. Lebih aman dari parsing manual yang bisa NaN.
             try {
@@ -404,7 +417,6 @@ class BillingController {
     // Log diagnostic kalau hasil generate = 0 — agar mudah troubleshoot
     if (created === 0) {
       try {
-        const { logger } = require('../utils/logger');
         logger.warn(`[BillingGen] 0 invoice ter-generate untuk ${targetMonth}/${targetYear}. ` +
           `total=${allCustomersCount} eligible=${eligibleCount} ` +
           `(active=${activeCount} isolated=${isolatedCount} suspended=${suspendedCount} inactive=${inactiveCount}) ` +
@@ -2178,36 +2190,20 @@ class BillingController {
     }
   }
 
-  // Customers with unpaid invoices
+  // Customers with unpaid invoices (one row per customer, capped).
   async unpaidCustomers(req, res) {
     try {
       const { Customer, Package } = require('../models');
-      const { Op } = require('sequelize');
+      const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 200, 1), 500);
       const rows = await Invoice.findAll({
         where: { status: { [Op.in]: ['unpaid','overdue'] } },
         attributes: ['customer_id'],
         group: ['customer_id'],
         include: [{ model: Customer, as: 'customer', attributes: ['id','customer_id','name','phone'], include: [{ model: Package, as: 'package', attributes: ['name','price'] }] }],
-        raw: false
+        raw: false,
+        limit
       });
       res.json({ success: true, data: rows.map(r => r.customer).filter(Boolean) });
-    } catch(e) { res.status(500).json({ success: false, message: e.message }); }
-  }
-
-  // Daftar customer dengan invoice unpaid
-  async unpaidCustomers(req, res) {
-    try {
-      const { Invoice, Customer, Package } = require('../models');
-      const rows = await Invoice.findAll({
-        where: { status: { [Op.in]: ['unpaid','overdue'] } },
-        include: [{
-          model: Customer, as: 'customer',
-          attributes: ['id','customer_id','name','phone','status'],
-          include: [{ model: Package, as: 'package', attributes: ['name','price'] }]
-        }],
-        order: [['due_date','ASC']]
-      });
-      res.json({ success: true, data: rows });
     } catch(e) { res.status(500).json({ success: false, message: e.message }); }
   }
 
@@ -2446,7 +2442,6 @@ class BillingController {
       try {
         const userId   = req.user?.id || null;
         const userName = req.user?.username || req.user?.name || 'unknown';
-        const { logger } = require('../utils/logger');
         logger.warn('[BillingReset] User=' + userName + '(id=' + userId + ') mode=' + mode
           + (mode === 'period' ? ` period=${month}/${year}` : '')
           + ` deletedInvoices=${deletedInvoices} deletedPayments=${deletedPayments} deletedKeuangan=${deletedKeuangan}`);

@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { loadAuthUser, invalidateAuthUserCache } = require('../utils/authUserCache');
+const { isStaffJwtPayload } = require('../utils/staffAuth');
 
 // Bangun URL redirect ke /login sambil menyimpan tujuan awal (?next=...).
 // Hanya path internal yang aman (diawali '/', bukan '//' atau 'http') yang
@@ -48,6 +49,20 @@ const authenticate = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // Portal/reseller tokens are signed with the same JWT_SECRET when
+    // JWT_PORTAL_SECRET / JWT_RESELLER_SECRET are unset. Reject those
+    // audiences so a customer token cannot load User.findByPk(customers.id).
+    if (!isStaffJwtPayload(decoded)) {
+      const isApiRequest = req.xhr
+        || req.headers.accept?.includes('application/json')
+        || req.headers['content-type']?.includes('application/json')
+        || req.headers['x-requested-with'] === 'XMLHttpRequest'
+        || req.path.startsWith('/api');
+      if (isApiRequest) {
+        return res.status(403).json({ success: false, message: 'Token tidak valid untuk area staff' });
+      }
+      return res.redirect(buildLoginRedirect(req));
+    }
     const user = await loadAuthUser(decoded.id);
 
     if (!user || !user.is_active) {
@@ -128,9 +143,11 @@ const optionalAuth = async (req, res, next) => {
     let token = req.cookies?.token || req.headers.authorization?.substring(7);
     if (token) {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const user = await loadAuthUser(decoded.id);
-      if (user && user.is_active) {
-        req.user = user;
+      if (isStaffJwtPayload(decoded)) {
+        const user = await loadAuthUser(decoded.id);
+        if (user && user.is_active) {
+          req.user = user;
+        }
       }
     }
   } catch (e) {

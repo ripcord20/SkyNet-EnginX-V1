@@ -106,7 +106,7 @@ class DemoController {
 
       // 5. Generate JWT (expiry cocok dengan masa berlaku akun)
       const token = jwt.sign(
-        { id: user.id, email: user.email, role: demoRole.name, isDemo: true },
+        { id: user.id, email: user.email, role: demoRole.name, isDemo: true, type: 'staff' },
         process.env.JWT_SECRET,
         { expiresIn: `${DEMO_TTL_HOURS}h` }
       );

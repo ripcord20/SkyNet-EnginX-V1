@@ -12,6 +12,7 @@ const crypto = require('crypto');
 const { ResellerTopup } = require('../models');
 const ResellerTopupService = require('../services/ResellerTopupService');
 const logger = require('../utils/logger');
+const { timingSafeEqualString } = require('../utils/cryptoSafe');
 
 async function getSetting(key, fallback = null) {
   return ResellerTopupService.getSetting(key, fallback);
@@ -36,7 +37,7 @@ const ResellerWebhookController = {
       const rawBody = req.rawBody || JSON.stringify(req.body || {});
       const incomingSig = req.headers['x-callback-signature'] || '';
       const expectedSig = crypto.createHmac('sha256', privateKey).update(rawBody).digest('hex');
-      if (String(incomingSig).toLowerCase() !== expectedSig.toLowerCase()) {
+      if (!timingSafeEqualString(String(incomingSig).toLowerCase(), expectedSig.toLowerCase())) {
         logger.warn('[ResellerTopup] Tripay webhook: invalid signature');
         return res.status(403).json({ success: false, message: 'Invalid signature' });
       }
@@ -83,6 +84,10 @@ const ResellerWebhookController = {
   async midtrans(req, res) {
     try {
       const serverKey = await getSetting('payment_gateway_server_key', '');
+      if (!serverKey) {
+        logger.error('[ResellerTopup] Midtrans webhook: server_key belum dikonfigurasi');
+        return res.status(503).json({ success: false, message: 'Gateway not configured' });
+      }
       const b = req.body || {};
       const orderId = b.order_id || '';
       // Routing terpusat: bila ini notifikasi INVOICE pelanggan (INV-...),
@@ -95,7 +100,7 @@ const ResellerWebhookController = {
       // Signature: sha512(order_id + status_code + gross_amount + serverKey)
       const expected = crypto.createHash('sha512')
         .update(orderId + b.status_code + b.gross_amount + serverKey).digest('hex');
-      if (String(b.signature_key || '').toLowerCase() !== expected.toLowerCase()) {
+      if (!timingSafeEqualString(String(b.signature_key || '').toLowerCase(), expected.toLowerCase())) {
         logger.warn('[ResellerTopup] Midtrans webhook: invalid signature');
         return res.status(403).json({ success: false, message: 'Invalid signature' });
       }
@@ -109,7 +114,9 @@ const ResellerWebhookController = {
       if ((tStatus === 'capture' && fraud === 'accept') || tStatus === 'settlement') {
         const cb = Math.round(parseFloat(b.gross_amount || 0));
         const exp = Math.round(Number(topup.amount));
-        if (cb && cb !== exp) return res.status(400).json({ success: false, message: 'Amount mismatch' });
+        if (!Number.isFinite(cb) || cb !== exp) {
+          return res.status(400).json({ success: false, message: 'Amount mismatch' });
+        }
         await ResellerTopupService.creditTopup(topup.id);
         logger.info(`[ResellerTopup] Midtrans settle → credited ${topup.ref}`);
       } else if (['expire', 'cancel', 'deny'].includes(tStatus)) {
@@ -125,9 +132,14 @@ const ResellerWebhookController = {
   // ── Xendit ──────────────────────────────────────────────────
   async xendit(req, res) {
     try {
-      const callbackToken = await getSetting('payment_gateway_xendit_callback_token', '');
+      const callbackToken = await getSetting('payment_gateway_xendit_callback_token', '')
+        || await getSetting('payment_gateway_callback_token', '');
       const incoming = req.headers['x-callback-token'] || '';
-      if (callbackToken && incoming !== callbackToken) {
+      if (!callbackToken) {
+        logger.error('[ResellerTopup] Xendit webhook: callback_token not configured — rejecting');
+        return res.status(503).json({ success: false, message: 'Gateway not configured' });
+      }
+      if (!timingSafeEqualString(incoming, callbackToken)) {
         logger.warn('[ResellerTopup] Xendit webhook: invalid callback token');
         return res.status(403).json({ success: false, message: 'Invalid token' });
       }
@@ -141,7 +153,9 @@ const ResellerWebhookController = {
       if (status === 'PAID' || status === 'SETTLED') {
         const cb = Math.round(parseFloat(b.paid_amount || b.amount || 0));
         const exp = Math.round(Number(topup.amount));
-        if (cb && cb !== exp) return res.status(400).json({ success: false, message: 'Amount mismatch' });
+        if (!Number.isFinite(cb) || cb !== exp) {
+          return res.status(400).json({ success: false, message: 'Amount mismatch' });
+        }
         await ResellerTopupService.creditTopup(topup.id);
         logger.info(`[ResellerTopup] Xendit PAID → credited ${topup.ref}`);
       } else if (status === 'EXPIRED') {
@@ -163,7 +177,7 @@ const ResellerWebhookController = {
       // Signature Duitku callback: md5(merchantCode + amount + merchantOrderId + apiKey)
       const expected = crypto.createHash('md5')
         .update(String(merchantCode) + String(b.amount) + String(b.merchantOrderId) + String(apiKey)).digest('hex');
-      if (String(b.signature || '').toLowerCase() !== expected.toLowerCase()) {
+      if (!timingSafeEqualString(String(b.signature || '').toLowerCase(), expected.toLowerCase())) {
         logger.warn('[ResellerTopup] Duitku webhook: invalid signature');
         return res.status(403).json({ success: false, message: 'Invalid signature' });
       }

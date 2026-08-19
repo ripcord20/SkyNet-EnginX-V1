@@ -15,6 +15,7 @@
 const jwt = require('jsonwebtoken');
 const { User, Role, ActivityLog } = require('../models');
 const logger = require('../utils/logger');
+const { isStaffJwtPayload } = require('../utils/staffAuth');
 
 const DEMO_JWT_EXPIRY = process.env.DEMO_JWT_EXPIRY || '2h';
 
@@ -67,7 +68,7 @@ class AuthController {
 
       // Generate tokens
       const token = jwt.sign(
-        { id: user.id, email: user.email, role: user.role?.name, isDemo },
+        { id: user.id, email: user.email, role: user.role?.name, isDemo, type: 'staff' },
         process.env.JWT_SECRET,
         { expiresIn: tokenExpiry }
       );
@@ -164,6 +165,9 @@ class AuthController {
       }
       const token = authHeader.substring(7);
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      if (!isStaffJwtPayload(decoded)) {
+        return res.status(403).json({ success: false, message: 'Token tidak valid untuk area staff' });
+      }
       const user = await User.findByPk(decoded.id, {
         include: [{ model: Role, as: 'role' }]
       });
@@ -218,7 +222,7 @@ class AuthController {
       }
 
       const newToken = jwt.sign(
-        { id: user.id, email: user.email, role: user.role?.name },
+        { id: user.id, email: user.email, role: user.role?.name, type: 'staff' },
         process.env.JWT_SECRET,
         { expiresIn: REGULAR_JWT_EXPIRY }
       );

@@ -14,6 +14,7 @@ const { Op } = require('sequelize');
 const genieacs = require('../services/GenieacsService');
 const { getMikrotikInstance } = require('../services/MikrotikService');
 const logger = require('../utils/logger');
+const { timingSafeEqualString } = require('../utils/cryptoSafe');
 
 // ── helper: ambil setting dari DB ─────────────────────────────
 async function getSetting(key, fallback = null) {
@@ -1578,7 +1579,7 @@ exports.midtransNotif = async (req, res) => {
     const expected = crypto.createHash('sha512')
       .update(`${order_id}${status_code}${gross_amount}${serverKey}`)
       .digest('hex');
-    if (signature_key !== expected) {
+    if (!timingSafeEqualString(String(signature_key || '').toLowerCase(), expected.toLowerCase())) {
       logger.warn(`Midtrans webhook: invalid signature for ${order_id}`);
       return res.status(403).json({ success: false, message: 'Invalid signature' });
     }
@@ -1602,6 +1603,13 @@ exports.midtransNotif = async (req, res) => {
     const isFailed  = ['cancel','deny','expire','failure'].includes(transaction_status);
 
     if (isSuccess) {
+      const expectedAmount = Math.round(parseFloat(invoice.total));
+      const callbackAmount = Math.round(parseFloat(gross_amount));
+      if (!Number.isFinite(callbackAmount) || callbackAmount !== expectedAmount) {
+        logger.error(`Midtrans webhook: amount mismatch invoice #${invoiceId} (callback=${callbackAmount}, expected=${expectedAmount})`);
+        return res.status(400).json({ success: false, message: 'Amount mismatch' });
+      }
+
       await Invoice.update(
         { status: 'paid', paid_date: new Date() },
         { where: { id: invoiceId } }
@@ -1617,7 +1625,7 @@ exports.midtransNotif = async (req, res) => {
 
       const newPayment = await Payment.create({
         invoice_id: invoiceId,
-        amount: parseFloat(gross_amount) || parseFloat(invoice.total),
+        amount: callbackAmount,
         payment_method: payMethod,
         payment_date: new Date().toISOString().slice(0, 10),
         reference_number: order_id,
@@ -1656,19 +1664,19 @@ exports.midtransNotif = async (req, res) => {
 // Verification: header "x-callback-token" cocok dengan callback_token di dashboard Xendit
 exports.xenditNotif = async (req, res) => {
   try {
-    // 1. Verifikasi callback token dari header
+    // 1. Verifikasi callback token dari header — fail closed bila belum di-set.
     const expectedToken = await getSetting('payment_gateway_callback_token', '');
-    if (expectedToken) {
-      const incomingToken = req.headers['x-callback-token'] || '';
-      if (incomingToken !== expectedToken) {
-        logger.warn('Xendit webhook: invalid x-callback-token');
-        return res.status(403).json({ success: false, message: 'Invalid callback token' });
-      }
-    } else {
-      logger.warn('Xendit webhook: callback_token belum dikonfigurasi (TIDAK AMAN!)');
+    const incomingToken = req.headers['x-callback-token'] || '';
+    if (!expectedToken) {
+      logger.error('Xendit webhook: callback_token not configured — rejecting');
+      return res.status(503).json({ success: false, message: 'Gateway not configured' });
+    }
+    if (!timingSafeEqualString(incomingToken, expectedToken)) {
+      logger.warn('Xendit webhook: invalid x-callback-token');
+      return res.status(403).json({ success: false, message: 'Invalid callback token' });
     }
 
-    const { external_id, status, paid_amount, payment_method, payment_channel, id: xenInvoiceId } = req.body;
+    const { external_id, status, paid_amount, amount, payment_method, payment_channel, id: xenInvoiceId } = req.body;
 
     const match = (external_id || '').match(/^INV-(\d+)-\d+$/);
     if (!match) {
@@ -1690,6 +1698,13 @@ exports.xenditNotif = async (req, res) => {
     }
 
     if (status === 'PAID' || status === 'SETTLED') {
+      const expectedAmount = Math.round(parseFloat(invoice.total));
+      const callbackAmount = Math.round(parseFloat(paid_amount || amount));
+      if (!Number.isFinite(callbackAmount) || callbackAmount !== expectedAmount) {
+        logger.error(`Xendit webhook: amount mismatch invoice #${invoiceId} (callback=${callbackAmount}, expected=${expectedAmount})`);
+        return res.status(400).json({ success: false, message: 'Amount mismatch' });
+      }
+
       await Invoice.update(
         { status: 'paid', paid_date: new Date() },
         { where: { id: invoiceId } }
@@ -1704,7 +1719,7 @@ exports.xenditNotif = async (req, res) => {
 
       const newPayment = await Payment.create({
         invoice_id: invoiceId,
-        amount: parseFloat(paid_amount) || parseFloat(invoice.total),
+        amount: callbackAmount,
         payment_method: payMethod,
         payment_date: new Date().toISOString().slice(0, 10),
         reference_number: external_id,
@@ -1791,7 +1806,7 @@ exports.duitkuNotif = async (req, res) => {
     const expected = crypto.createHash('md5')
       .update(String(merchantCode) + String(amount) + String(merchantOrderId) + apiKey)
       .digest('hex');
-    if (String(signature).toLowerCase() !== expected.toLowerCase()) {
+    if (!timingSafeEqualString(String(signature).toLowerCase(), expected.toLowerCase())) {
       logger.warn(`Duitku webhook: invalid signature for ${merchantOrderId}`);
       return res.status(403).send('Invalid signature');
     }
@@ -1908,7 +1923,7 @@ exports.tripayNotif = async (req, res) => {
     const rawBody = (typeof req.rawBody === 'string') ? req.rawBody : '';
     const incomingSig = req.headers['x-callback-signature'] || '';
     const expectedSig = crypto.createHmac('sha256', privateKey).update(rawBody).digest('hex');
-    if (String(incomingSig).toLowerCase() !== expectedSig.toLowerCase()) {
+    if (!timingSafeEqualString(String(incomingSig).toLowerCase(), expectedSig.toLowerCase())) {
       // Log diagnostik (tanpa membocorkan private key) untuk mempermudah audit.
       logger.warn(`Tripay webhook: invalid signature (rawBodyLen=${rawBody.length}, ` +
         `incoming=${String(incomingSig).slice(0, 12)}…, expected=${expectedSig.slice(0, 12)}…, ` +

@@ -49,7 +49,8 @@ const pubLimiter = rateLimit({
 // ── Page router (mount di /beli) ────────────────────────────────────
 const pageRouter = express.Router();
 pageRouter.get('/', Ctrl.renderLanding);
-pageRouter.get('/status/:code', Ctrl.renderStatus);
+pageRouter.get('/status/:code([A-Za-z0-9_-]{4,64})', Ctrl.renderStatus);
+pageRouter.get('/status/:code', (req, res) => res.status(400).send('Kode order tidak valid'));
 
 // ── API router (mount di /pub/voucher) ──────────────────────────────
 const apiRouter = express.Router();

@@ -34,12 +34,10 @@ async function getSetting(key, fallback = '') {
   }
 }
 
-function normalizeIp(rawIp, xff) {
-  let ip = String(rawIp || '').trim();
-  if (xff) {
-    const first = String(xff).split(',')[0].trim();
-    if (first) ip = first;
-  }
+function resolveClientIp(req) {
+  // req.ip is the single source of truth (trust proxy hop count 1).
+  // Do not re-parse X-Forwarded-For — that header is client-controlled.
+  let ip = String(req.ip || req.socket?.remoteAddress || '').trim();
   if (ip.startsWith('::ffff:')) ip = ip.slice(7);
   if (/^\d+\.\d+\.\d+\.\d+:\d+$/.test(ip)) ip = ip.split(':')[0];
   return ip;
@@ -50,8 +48,7 @@ function normalizeIp(rawIp, xff) {
  * Render halaman pemberitahuan isolir (global, tanpa lookup).
  */
 exports.renderPage = async (req, res) => {
-  const xff = req.headers['x-forwarded-for'] || '';
-  const clientIp = normalizeIp(req.ip || req.connection?.remoteAddress || '', xff);
+  const clientIp = resolveClientIp(req);
 
   // ── Ambil brand & customisasi halaman ──
   const [

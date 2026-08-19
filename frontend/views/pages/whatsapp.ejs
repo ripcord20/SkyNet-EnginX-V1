@@ -1448,7 +1448,7 @@
           <div style="font-size:11.5px;color:#475569;line-height:1.5;">
             Di dashboard Fonnte → <b>Device → Edit</b>, isi <b>Webhook URL</b> dengan:
             <code id="fonnteWebhookUrl" style="display:block;margin-top:5px;padding:6px 8px;background:#fff;border:1px solid #cdd9ee;border-radius:6px;font-size:11px;word-break:break-all;color:#0d1b3e;">—</code>
-            <span style="display:block;margin-top:5px;">Lalu aktifkan <b>Inbox</b> di device tersebut. Tanpa webhook, pesan masuk tidak akan diterima aplikasi.</span>
+            <span style="display:block;margin-top:5px;">Set <b>Webhook Token</b> di Fonnte sama dengan env <code>FONNTE_WEBHOOK_TOKEN</code> di server. Tanpa token itu, webhook ditolak. Aktifkan juga <b>Inbox</b> di device.</span>
           </div>
         </div>
       </div>
@@ -1466,7 +1466,7 @@
           <div style="font-size:11.5px;color:#475569;line-height:1.5;">
             Webhook didaftarkan <b>otomatis</b> saat session dibuat dari aplikasi ini (butuh env <code>APP_URL</code> terisi). Kalau session dibuat manual dari dashboard WAHA, isi Webhook URL dengan:
             <code id="wahaWebhookUrl" style="display:block;margin-top:5px;padding:6px 8px;background:#fff;border:1px solid #cdd9ee;border-radius:6px;font-size:11px;word-break:break-all;color:#0d1b3e;">—</code>
-            <span style="display:block;margin-top:5px;">dengan events: <b>message</b>, <b>message.any</b>, <b>session.status</b>.</span>
+            <span style="display:block;margin-top:5px;">dengan events: <b>message.any</b>, <b>message.ack</b>, <b>session.status</b>, dan header <b>X-Api-Key</b> = API Key WAHA di atas. Webhook tanpa API key akan ditolak.</span>
           </div>
         </div>
       </div>
