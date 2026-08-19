@@ -87,7 +87,8 @@ module.exports = (sequelize) => {
       { fields: ['customer_id'] },
       { fields: ['status'] },
       { fields: ['due_date'] },
-      { fields: ['period_month', 'period_year'] }
+      { fields: ['period_month', 'period_year'] },
+      { unique: true, name: 'uniq_invoice_customer_period', fields: ['customer_id', 'period_month', 'period_year'] }
     ]
   });
 

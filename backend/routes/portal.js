@@ -2,9 +2,70 @@
  * portal.js — Routes Customer Portal
  */
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const router  = express.Router();
 const { portalAuth } = require('../middleware/portalAuth');
 const PortalCtrl     = require('../controllers/CustomerPortalController');
+const { timingSafeEqualString, timingSafeEqualAny } = require('../utils/cryptoSafe');
+const logger = require('../utils/logger');
+
+const waWebhookLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many webhook requests' }
+});
+
+function incomingFonnteToken(req) {
+  return req.headers['x-webhook-token']
+    || req.headers['token']
+    || (req.body && req.body.token)
+    || (req.query && req.query.token)
+    || '';
+}
+
+async function verifyFonnteWebhook(req, res, next) {
+  try {
+    const expected = String(process.env.FONNTE_WEBHOOK_TOKEN || '').trim();
+    if (!expected) {
+      logger.error('[Fonnte] Webhook: FONNTE_WEBHOOK_TOKEN not configured — rejecting');
+      return res.status(503).json({ success: false, message: 'Webhook not configured' });
+    }
+    if (!timingSafeEqualString(incomingFonnteToken(req), expected)) {
+      logger.warn('[Fonnte] Webhook: invalid token');
+      return res.status(403).json({ success: false, message: 'Invalid webhook token' });
+    }
+    next();
+  } catch (e) {
+    logger.error('[Fonnte] Webhook auth error: ' + (e.message || e));
+    return res.status(500).json({ success: false });
+  }
+}
+
+async function verifyWahaWebhook(req, res, next) {
+  try {
+    const incoming = req.headers['x-api-key'] || req.headers['x-webhook-api-key'] || '';
+    const { WaSession } = require('../models');
+    const sessions = await WaSession.findAll({
+      where: { provider: 'waha' },
+      attributes: ['waha_api_key']
+    });
+    const keys = sessions.map(s => String(s.waha_api_key || '').trim()).filter(Boolean);
+    if (!keys.length) {
+      logger.error('[WAHA] Webhook: no session API key configured — rejecting');
+      return res.status(503).json({ success: false, message: 'Webhook not configured' });
+    }
+    if (!timingSafeEqualAny(incoming, keys)) {
+      logger.warn('[WAHA] Webhook: invalid X-Api-Key');
+      return res.status(403).json({ success: false, message: 'Invalid webhook token' });
+    }
+    next();
+  } catch (e) {
+    logger.error('[WAHA] Webhook auth error: ' + (e.message || e));
+    return res.status(500).json({ success: false });
+  }
+}
 
 // ── Public pages ──────────────────────────────────────────────
 // /portal/login — auto-redirect kalau customer sudah punya session valid.
@@ -100,8 +161,8 @@ router.post('/webhook/midtrans',  PortalCtrl.midtransNotif);
 router.post('/webhook/xendit',    PortalCtrl.xenditNotif);
 // Fonnte: pesan WA MASUK dari customer. Fonnte POST ke sini (set di
 // dashboard Fonnte → device → webhook URL). Body JSON: {device,sender,message,...}.
-// Public (Fonnte server eksternal, tanpa token kita) — validasi via session match.
-router.post('/webhook/fonnte', async (req, res) => {
+// Auth: FONNTE_WEBHOOK_TOKEN (env) must match the webhook token set in the Fonnte dashboard.
+router.post('/webhook/fonnte', waWebhookLimiter, verifyFonnteWebhook, async (req, res) => {
   try {
     const FonnteService = require('../services/FonnteService');
     const io = req.app.get('io');
@@ -116,9 +177,9 @@ router.post('/webhook/fonnte', async (req, res) => {
 // WAHA: event pesan/status dari instance WAHA self-hosted. Set otomatis saat
 // session dibuat via API (kalau APP_URL terisi), atau manual di dashboard WAHA
 // → session → webhooks: {APP_URL}/portal/webhook/waha
-// Events: message, message.any, session.status. Public (WAHA di server sendiri,
-// umumnya localhost) — validasi via pencocokan nama session di handler.
-router.post('/webhook/waha', async (req, res) => {
+// Events: message, message.any, session.status. Auth: X-Api-Key harus cocok
+// dengan wa_sessions.waha_api_key (dikirim sebagai customHeaders saat session dibuat).
+router.post('/webhook/waha', waWebhookLimiter, verifyWahaWebhook, async (req, res) => {
   try {
     const WahaService = require('../services/WahaService');
     const io = req.app.get('io');

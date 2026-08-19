@@ -31,11 +31,10 @@ const setupSocket = require('./services/SocketHandler');
 
 const app = express();
 
-// Trust proxy — wajib aktif kalau di belakang nginx/CDN supaya req.ip
-// dapat IP pelanggan asli (dari X-Forwarded-For), bukan IP nginx (127.0.0.1).
-// Ini penting untuk halaman publik isolir (/p/isolir) yang lookup customer
-// berdasarkan static_ip dari req.ip.
-app.set('trust proxy', true);
+// Trust proxy — nginx sits in front (one hop). Using `true` would trust
+// every X-Forwarded-For entry, so clients could spoof req.ip and bypass
+// authLimiter / lookupLimiter. Hop count 1 takes the address nginx set.
+app.set('trust proxy', 1);
 
 const server = http.createServer(app);
 
@@ -76,6 +75,10 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, '..', 'frontend', 'views'));
 const isDev = process.env.APP_ENV === 'development' || process.env.NODE_ENV === 'development';
 app.set('view cache', !isDev);
+
+// Safe JSON for EJS <script> embeds — escapes < so </script> cannot break out.
+const { safeJson } = require('./utils/cryptoSafe');
+app.locals.safeJson = safeJson;
 
 // Middleware
 app.use(helmet({
@@ -823,6 +826,37 @@ const startServer = async () => {
       }
     } catch (e) {
       logger.warn('Failed to migrate invoices verification columns: ' + (e.message || e));
+    }
+
+    // Unique (customer_id, period_month, period_year) — cegah invoice dobel
+    // saat cron + klik Generate berbarengan. Skip kalau masih ada duplikat.
+    try {
+      const [idxRows] = await db.sequelize.query(
+        `SELECT COUNT(*) AS c FROM information_schema.statistics
+          WHERE table_schema = DATABASE()
+            AND table_name = 'invoices'
+            AND index_name = 'uniq_invoice_customer_period'`
+      );
+      if (!(idxRows && idxRows[0] && parseInt(idxRows[0].c) > 0)) {
+        const [dups] = await db.sequelize.query(
+          `SELECT customer_id, period_month, period_year, COUNT(*) AS c
+             FROM invoices
+            GROUP BY customer_id, period_month, period_year
+           HAVING c > 1
+            LIMIT 5`
+        );
+        if (dups && dups.length) {
+          logger.warn('Skipped uniq_invoice_customer_period: duplicate invoices exist (e.g. customer_id=' +
+            dups[0].customer_id + ' period=' + dups[0].period_month + '/' + dups[0].period_year + '). Deduplicate first.');
+        } else {
+          await db.sequelize.query(
+            'ALTER TABLE invoices ADD UNIQUE INDEX uniq_invoice_customer_period (customer_id, period_month, period_year)'
+          );
+          logger.info('Migrated: invoices unique index uniq_invoice_customer_period');
+        }
+      }
+    } catch (e) {
+      logger.warn('Failed to migrate invoices unique period index: ' + (e.message || e));
     }
 
     // Migrasi index unik reminder_logs: dari (reminder_id,invoice_id,send_date)

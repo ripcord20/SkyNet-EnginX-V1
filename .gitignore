@@ -32,6 +32,12 @@ frontend/public/uploads/payment/
 frontend/public/uploads/assets/
 frontend/public/uploads/infra/
 
+# Release artifacts, mobile builds, and SQL dumps. Zip/APK previously
+# shipped a live .env (JWT/DB/SNMP secrets) — keep them out of the tree.
+*.zip
+*.apk
+*.sql
+
 # ── Developer noise: "copy" duplicates ──────
 # Editors often create "foo - Copy.js" / "foo copy.ejs" as manual backups.
 # These should never reach production; keep them out of the repo.

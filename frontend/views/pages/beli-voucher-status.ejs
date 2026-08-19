@@ -76,8 +76,8 @@
   <div class="toast" id="toast"></div>
 
 <script>
-  var CODE = <%- JSON.stringify(orderCode) %>;
-  var WA = <%- JSON.stringify(brand.whatsapp || '') %>;
+  var CODE = <%- typeof safeJson === 'function' ? safeJson(orderCode) : JSON.stringify(orderCode).replace(/</g, '\\u003c') %>;
+  var WA = <%- typeof safeJson === 'function' ? safeJson(brand.whatsapp || '') : JSON.stringify(brand.whatsapp || '').replace(/</g, '\\u003c') %>;
   var pollCount = 0, timer = null;
 
   function rp(n){ return 'Rp ' + Number(n||0).toLocaleString('id-ID'); }
