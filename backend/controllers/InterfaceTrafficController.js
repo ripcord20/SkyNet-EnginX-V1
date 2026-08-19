@@ -47,8 +47,9 @@ class InterfaceTrafficController {
       const interfaces = await mt.getInterfaces();
       const running = interfaces.filter(i => i.running && !i.disabled);
 
-      // Limit 10 interface untuk performa
-      const names = running.slice(0, 10).map(i => i.name);
+      // Cap supaya monitor-traffic (1 POST / interface) tidak menumpuk;
+      // 24 cukup untuk kartu + live chart tanpa membebani RouterOS.
+      const names = running.slice(0, 24).map(i => i.name);
 
       // Bulk request - 1 call ke MikroTik untuk semua interface
       const stats = await mt.getInterfacesBulkStats(names);
@@ -79,7 +80,7 @@ class InterfaceTrafficController {
     try {
       const mt = await getMikrotikInstanceByDevice(resolveDeviceId(req));
       const names = req.query.names
-        ? req.query.names.split(',').map(n => n.trim()).filter(Boolean).slice(0, 10)
+        ? req.query.names.split(',').map(n => n.trim()).filter(Boolean).slice(0, 24)
         : [];
 
       if (!names.length) {
@@ -100,8 +101,20 @@ class InterfaceTrafficController {
 function setupInterfaceMonitoring(io) {
   io.on('connection', (socket) => {
     socket.on('interface:start_monitor', async (data) => {
-      const { interfaces: ifaceNames = [], interval = 2000 } = data || {};
-      const mt = getMikrotikInstance();
+      const { interfaces: ifaceNames = [], interval = 2000, device_id } = data || {};
+      const names = (Array.isArray(ifaceNames) ? ifaceNames : [])
+        .map(n => String(n || '').trim()).filter(Boolean).slice(0, 24);
+      const deviceId = device_id ? parseInt(device_id, 10) : null;
+
+      let mt;
+      try {
+        mt = deviceId
+          ? await getMikrotikInstanceByDevice(deviceId)
+          : getMikrotikInstance();
+      } catch (err) {
+        socket.emit('interface:error', { message: err.message });
+        return;
+      }
 
       if (monitoringSessions.has(socket.id)) {
         clearInterval(monitoringSessions.get(socket.id));
@@ -109,9 +122,9 @@ function setupInterfaceMonitoring(io) {
 
       const poll = async () => {
         try {
-          const stats = await mt.getInterfacesBulkStats(ifaceNames);
+          const stats = await mt.getInterfacesBulkStats(names);
           // Apply demo masking kalau user adalah demo
-          let payload = { data: stats, timestamp: new Date() };
+          let payload = { data: stats, timestamp: new Date(), device_id: deviceId };
           if (socket.userRole && String(socket.userRole).toLowerCase() === 'demo') {
             try {
               const { maskDeep } = require('../middleware/demoDataMasker');
@@ -125,7 +138,7 @@ function setupInterfaceMonitoring(io) {
       };
 
       poll();
-      const timer = setInterval(poll, Math.max(interval, 2000));
+      const timer = setInterval(poll, Math.max(parseInt(interval, 10) || 2000, 2000));
       monitoringSessions.set(socket.id, timer);
     });
 

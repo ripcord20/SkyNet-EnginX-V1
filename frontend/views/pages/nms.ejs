@@ -108,7 +108,8 @@
     .metric-unit{ font-size:11px; color:var(--g-text-dim); font-weight:500; margin-left:2px; }
     .metric-sub{ font-size:9.5px; color:var(--g-text-faint); font-family:var(--g-mono); margin-top:2px; }
 
-    .panel-chart{ padding:4px 6px 2px; min-height:140px; }
+    .panel-chart{ padding:4px 6px 2px; min-height:140px; width:100%; overflow:hidden; }
+    .panel-chart .apexcharts-canvas{ width:100% !important; max-width:100%; }
 
     /* Empty / loading states */
     .nms-empty{ text-align:center; padding:80px 24px; color:var(--g-text-dim); }
@@ -213,7 +214,8 @@
               <option value="">Semua Router</option>
             </select>
             <select class="nms-select" id="nmsInterval" title="Interval refresh" onchange="nmsSetInterval(this.value)">
-              <option value="5000">5 detik</option>
+              <option value="2000">2 detik</option>
+              <option value="5000" selected>5 detik</option>
               <option value="30000">30 detik</option>
               <option value="60000">1 menit</option>
               <option value="300000">5 menit</option>
@@ -350,7 +352,10 @@ const NMS = {
   paused: false,
   timer: null,
   POLL_MS: 5000,
-  MAX_POINTS: 60       // 60 titik × 5s = 5 menit window
+  MAX_POINTS: 60,      // 60 titik × 5s = 5 menit window
+  _tickInFlight: false,
+  _ro: null,
+  _roT: null
 };
 
 /* ── Theme (persist) ── */
@@ -392,6 +397,38 @@ function unitbps(bps){
 
 /* ── Chart theme (reads CSS vars live) ── */
 function cssVar(n){ return getComputedStyle(document.getElementById('nmsRoot')).getPropertyValue(n).trim(); }
+function nmsWindowPoints(){
+  // Jaga ~5 menit untuk interval cepat, 60 titik untuk interval panjang
+  if (NMS.POLL_MS <= 5000) return Math.max(30, Math.ceil(5 * 60 * 1000 / NMS.POLL_MS));
+  return 60;
+}
+function nmsWindowMs(){ return nmsWindowPoints() * NMS.POLL_MS; }
+function nmsAnimSpeed(){ return Math.max(280, Math.min(NMS.POLL_MS * 0.7, 1200)); }
+
+function nmsResizeCharts(){
+  Object.values(NMS.charts).forEach(c => { try { c.resize(); } catch(e){} });
+  if (NMS.detChart) { try { NMS.detChart.resize(); } catch(e){} }
+}
+function nmsBindResize(){
+  if (NMS._roBound) return;
+  NMS._roBound = true;
+  window.addEventListener('resize', () => {
+    clearTimeout(NMS._roT);
+    NMS._roT = setTimeout(nmsResizeCharts, 80);
+  });
+  window.addEventListener('orientationchange', () => setTimeout(nmsResizeCharts, 200));
+  const wrap = document.getElementById('nmsGridWrap');
+  if (wrap && typeof ResizeObserver !== 'undefined') {
+    try {
+      NMS._ro = new ResizeObserver(() => {
+        clearTimeout(NMS._roT);
+        NMS._roT = setTimeout(nmsResizeCharts, 80);
+      });
+      NMS._ro.observe(wrap);
+    } catch(e){}
+  }
+}
+
 function nmsChartTheme(){
   return {
     chart:{ foreColor: cssVar('--g-text-faint') },
@@ -435,14 +472,14 @@ function panelHTML(p){
 function makeChart(p){
   const rxC = cssVar('--g-rx'), txC = cssVar('--g-tx');
   const opts = {
-    chart:{ type:'area', height:150, stacked:true, animations:{ enabled:true, easing:'linear', dynamicAnimation:{ speed:600 } }, toolbar:{ show:false }, zoom:{ enabled:false }, foreColor: cssVar('--g-text-faint'), fontFamily:'JetBrains Mono, monospace', sparkline:{ enabled:false } },
+    chart:{ type:'area', height:150, width:'100%', stacked:true, animations:{ enabled:true, easing:'linear', dynamicAnimation:{ speed: nmsAnimSpeed() } }, toolbar:{ show:false }, zoom:{ enabled:false }, redrawOnParentResize:true, redrawOnWindowResize:true, foreColor: cssVar('--g-text-faint'), fontFamily:'JetBrains Mono, monospace', sparkline:{ enabled:false } },
     series:[ { name:'RX', data:[] }, { name:'TX', data:[] } ],
     colors:[ rxC, txC ],
     stroke:{ curve:'smooth', width:1.5, lineCap:'round' },
     fill:{ type:'gradient', gradient:{ shade:'dark', type:'vertical', shadeIntensity:1, gradientToColors:[ rxC, txC ], inverseColors:false, opacityFrom:0.9, opacityTo:0.15, stops:[0,90,100] } },
     dataLabels:{ enabled:false },
     grid:{ borderColor: cssVar('--g-grid'), strokeDashArray:3, padding:{ left:6, right:6, top:0, bottom:0 } },
-    xaxis:{ type:'category', labels:{ show:false }, axisBorder:{ show:false }, axisTicks:{ show:false } },
+    xaxis:{ type:'datetime', range: nmsWindowMs(), labels:{ show:false }, axisBorder:{ show:false }, axisTicks:{ show:false } },
     yaxis:{ labels:{ formatter:(v)=> fmtbps(v)+' '+unitbps(v), style:{ fontSize:'10px' } }, min:0, forceNiceScale:true },
     legend:{ show:false },
     tooltip:{ theme:(document.documentElement.getAttribute('data-nms-theme')==='light'?'light':'dark'), x:{ show:false }, y:{ formatter:(v)=> fmtbps(v)+' '+unitbps(v) } }
@@ -493,6 +530,7 @@ async function nmsLoadPanels(){
     list.forEach(p => { NMS.panels[p.id] = p; makeChart(p); });
 
     nmsTick(); // immediate first poll
+    setTimeout(nmsResizeCharts, 120);
   }catch(e){
     console.error('nmsLoadPanels', e);
     const wrap = document.getElementById('nmsGridWrap');
@@ -522,24 +560,37 @@ function nmsFilterRouter(){
 // Ganti interval refresh
 function nmsSetInterval(ms){
   NMS.POLL_MS = parseInt(ms) || 5000;
+  NMS.MAX_POINTS = nmsWindowPoints();
   localStorage.setItem('nms_interval', NMS.POLL_MS);
   if(NMS.timer) clearInterval(NMS.timer);
   NMS.timer = setInterval(nmsTick, NMS.POLL_MS);
+  Object.values(NMS.charts).forEach(c => {
+    try {
+      c.updateOptions({
+        chart:{ animations:{ enabled:true, easing:'linear', dynamicAnimation:{ speed: nmsAnimSpeed() } } },
+        xaxis:{ range: nmsWindowMs() }
+      }, false, false);
+    } catch(e){}
+  });
   nmsTick(); // refresh langsung
 }
 
 /* ── Poll live stats ── */
 async function nmsTick(){
-  if(NMS.paused) return;
+  if(NMS.paused || NMS._tickInFlight) return;
+  NMS._tickInFlight = true;
   try{
     const r = await App.api('/nms/live');
     if(!r || !r.success) return;
     const now = new Date().toLocaleTimeString('id-ID', { hour12:false });
+    const ts = Date.now();
+    const maxPts = nmsWindowPoints();
     (r.data || []).forEach(d => {
       const s = NMS.series[d.id];
       if(!s) return;
-      s.rx.push(d.rx_bps); s.tx.push(d.tx_bps);
-      if(s.rx.length > NMS.MAX_POINTS){ s.rx.shift(); s.tx.shift(); }
+      s.rx.push({ x: ts, y: d.rx_bps });
+      s.tx.push({ x: ts, y: d.tx_bps });
+      if(s.rx.length > maxPts){ s.rx.shift(); s.tx.shift(); }
       s.rxmax = Math.max(s.rxmax, d.rx_bps);
       s.txmax = Math.max(s.txmax, d.tx_bps);
 
@@ -580,6 +631,7 @@ async function nmsTick(){
     });
     document.getElementById('nmsClock').textContent = now;
   }catch(e){ console.error('nmsTick', e); }
+  finally { NMS._tickInFlight = false; }
 }
 function setTxt(id,v){ const el=document.getElementById(id); if(el) el.textContent=v; }
 
@@ -625,14 +677,14 @@ async function nmsOpenDetail(id){
   const rxC = cssVar('--g-rx'), txC = cssVar('--g-tx');
   if(NMS.detChart){ try{ NMS.detChart.destroy(); }catch(e){} NMS.detChart=null; }
   NMS.detChart = new ApexCharts(document.getElementById('dtChart'), {
-    chart:{ type:'area', height:240, width:'100%', stacked:true, animations:{ enabled:true, easing:'linear', dynamicAnimation:{ speed:600 } }, toolbar:{ show:false }, zoom:{ enabled:false }, foreColor: cssVar('--g-text-faint'), fontFamily:'JetBrains Mono, monospace' },
+    chart:{ type:'area', height:240, width:'100%', stacked:true, animations:{ enabled:true, easing:'linear', dynamicAnimation:{ speed: nmsAnimSpeed() } }, toolbar:{ show:false }, zoom:{ enabled:false }, redrawOnParentResize:true, redrawOnWindowResize:true, foreColor: cssVar('--g-text-faint'), fontFamily:'JetBrains Mono, monospace' },
     series:[ { name:'RX', data: s.rx.slice() }, { name:'TX', data: s.tx.slice() } ],
     colors:[ rxC, txC ],
     stroke:{ curve:'smooth', width:1.5, lineCap:'round' },
     fill:{ type:'gradient', gradient:{ shade:'dark', type:'vertical', shadeIntensity:1, gradientToColors:[ rxC, txC ], inverseColors:false, opacityFrom:0.9, opacityTo:0.15, stops:[0,90,100] } },
     dataLabels:{ enabled:false },
     grid:{ borderColor: cssVar('--g-grid'), strokeDashArray:3, padding:{ left:8, right:8 } },
-    xaxis:{ type:'category', labels:{ show:false }, axisBorder:{ show:false }, axisTicks:{ show:false } },
+    xaxis:{ type:'datetime', range: nmsWindowMs(), labels:{ show:false }, axisBorder:{ show:false }, axisTicks:{ show:false } },
     yaxis:{ labels:{ formatter:(v)=> fmtbps(v)+' '+unitbps(v), style:{ fontSize:'11px' } }, min:0, forceNiceScale:true },
     legend:{ show:true, position:'top', horizontalAlign:'right', fontSize:'12px', markers:{ width:9, height:9 } },
     tooltip:{ theme:(document.documentElement.getAttribute('data-nms-theme')==='light'?'light':'dark'), x:{ show:false }, y:{ formatter:(v)=> fmtbps(v)+' '+unitbps(v) } }
@@ -693,7 +745,12 @@ async function nmsSetRange(range){
   if(range === 'live'){
     note.textContent = 'Live · window 5 menit terakhir (refresh otomatis)';
     const s = NMS.series[NMS.detOpenId] || { rx:[], tx:[] };
-    if(NMS.detChart) NMS.detChart.updateSeries([ { name:'RX', data: s.rx.slice() }, { name:'TX', data: s.tx.slice() } ], true);
+    if(NMS.detChart){
+      NMS.detChart.updateOptions({
+        xaxis:{ type:'datetime', range: nmsWindowMs(), labels:{ show:false }, axisBorder:{ show:false }, axisTicks:{ show:false } }
+      }, false, false);
+      NMS.detChart.updateSeries([ { name:'RX', data: s.rx.slice() }, { name:'TX', data: s.tx.slice() } ], true);
+    }
     return;
   }
   // histori dari server
@@ -812,13 +869,18 @@ async function nmsAddIface(routerId, ifaceName, el){
   nmsApplyTheme(localStorage.getItem('nms_theme') || 'dark');
   // pulihkan interval refresh tersimpan
   const savedInt = parseInt(localStorage.getItem('nms_interval'));
-  if(savedInt && [5000,30000,60000,300000,1800000].includes(savedInt)){
+  if(savedInt && [2000,5000,30000,60000,300000,1800000].includes(savedInt)){
     NMS.POLL_MS = savedInt;
     const sel = document.getElementById('nmsInterval'); if(sel) sel.value = String(savedInt);
   }
+  NMS.MAX_POINTS = nmsWindowPoints();
+  nmsBindResize();
   nmsLoadPanels();
   NMS.timer = setInterval(nmsTick, NMS.POLL_MS);
   document.addEventListener('keydown', e => { if(e.key==='Escape'){ nmsClosePicker(); nmsCloseDetail(); } });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) nmsTick();
+  });
 })();
 </script>
 </body>

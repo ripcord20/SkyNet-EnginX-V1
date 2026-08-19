@@ -18,23 +18,77 @@ const TrafficPage = {
   // Warna untuk per-interface chart (palet kaya, high-contrast)
   perIfColors: ['#2563eb','#ea580c','#16a34a','#dc2626','#0891b2','#d97706','#7c3aed','#db2777'],
 
-  INTERVAL: 5000,        // default 5s (sesuai <select id="pollInterval">)
-  MAX_PTS: 12,           // default 1m window (60s / 5s = 12 pts)
+  INTERVAL: 2000,        // default 2s — grafik live lebih rapat
+  MAX_PTS: 30,           // default 1m window (60s / 2s = 30 pts)
   timeMin: 1,            // active time range (minutes)
   chartMode: 'aggregate',// 'aggregate' | 'per-interface'
+  POLL_CAP: 24,          // max interface per tick (selaras backend)
 
   buf: { rx:[], tx:[], ts:[] },  // aggregate buffer
   bufPer: {},                    // per-interface buffer { name: { rx:[], tx:[], ts:[] } }
   lastPush: 0,
   _eventsBound: false,           // guard supaya bindEvents tidak dobel saat reset
+  _pollInFlight: false,
+  _lastSocket: 0,
+  _sock: null,
+  _resizeObs: null,
+  _resizeTimer: null,
+  _liveTimer: null,
 
   async init() {
     this.bindEvents();
+    this.bindChartResize();
+    this.bindSocket();
     await this.loadInterfaces();
     await this.pollTraffic();
     this.startPolling();
     this.bindTimeRange();
     this.bindChartMode();
+  },
+
+  chartHeight() {
+    const w = window.innerWidth || 1200;
+    if (w <= 480) return 200;
+    if (w <= 768) return 240;
+    return 360;
+  },
+
+  chartRangeMs() {
+    return Math.max(1, this.timeMin) * 60 * 1000;
+  },
+
+  animSpeed() {
+    return Math.max(280, Math.min(this.INTERVAL, 1200));
+  },
+
+  // Nama yang di-poll: interface ter-track dulu (untuk grafik), lalu running.
+  pollNames() {
+    const selected = Array.from(this.selected);
+    const running = this.interfaces
+      .filter(i => i.running && !i.disabled && !this.selected.has(i.name))
+      .map(i => i.name);
+    return [...selected, ...running].slice(0, this.POLL_CAP);
+  },
+
+  setLive(on) {
+    const chip = document.getElementById('chartLiveChip');
+    if (chip) chip.style.display = on && this.selected.size ? 'inline-flex' : 'none';
+    if (this._liveTimer) clearTimeout(this._liveTimer);
+    if (on) {
+      this._liveTimer = setTimeout(() => {
+        const el = document.getElementById('chartLiveChip');
+        if (el) el.style.display = 'none';
+      }, Math.max(this.INTERVAL * 3, 6000));
+    }
+  },
+
+  applyChartHeight() {
+    const h = this.chartHeight();
+    const area = document.getElementById('mainChart');
+    const empty = document.getElementById('emptyChart');
+    if (area) area.style.height = h + 'px';
+    if (empty) empty.style.height = h + 'px';
+    return h;
   },
 
   // Reset state untuk device baru — dipanggil dari MikrotikSelector.onChange.
@@ -46,6 +100,11 @@ const TrafficPage = {
     this.buf    = { rx:[], tx:[], ts:[] };
     this.bufPer = {};
     this.lastPush = 0;
+    this._lastSocket = 0;
+    this._pollInFlight = false;
+    if (this._sock && this._sock.connected) {
+      try { this._sock.emit('interface:stop_monitor'); } catch (_) {}
+    }
     if (this.apexChart) {
       try { this.apexChart.destroy(); } catch(_) {}
       this.apexChart = null;
@@ -92,37 +151,66 @@ const TrafficPage = {
     }
   },
 
-  async pollTraffic() {
-    const data = await App.api(_withDev('/mikrotik/interfaces/monitor'));
-    if (!data?.success) return;
-
-    const stats = Array.isArray(data.data) ? data.data : [];
+  applyTrafficStats(stats, requestedNames) {
+    const list = Array.isArray(stats) ? stats : [];
     const statsMap = {};
-    stats.forEach(s => { statsMap[s.name] = s; });
+    list.forEach(s => { if (s && s.name) statsMap[s.name] = s; });
+    const requested = requestedNames ? new Set(requestedNames) : null;
 
-    // Sinkronkan rx/tx rate ke objek interface, reset ke 0 jika tidak ada di statsMap
     this.interfaces.forEach(iface => {
       const s = statsMap[iface.name];
       if (s) {
-        iface._rxBps = s.rxBitsPerSecond;
-        iface._txBps = s.txBitsPerSecond;
-      } else {
+        iface._rxBps = s.rxBitsPerSecond || 0;
+        iface._txBps = s.txBitsPerSecond || 0;
+      } else if (!requested || requested.has(iface.name)) {
         iface._rxBps = 0;
         iface._txBps = 0;
       }
     });
 
     this.updateCards(statsMap);
-    this.pushChartData(stats);
+    this.pushChartData(list);
     this.updateSummary();
+    this.setLive(true);
+  },
+
+  async pollTraffic() {
+    if (this._pollInFlight) return;
+    // Socket sudah mengirim tick baru — jangan dobel REST di tick yang sama
+    if (this._lastSocket && (Date.now() - this._lastSocket) < Math.max(700, this.INTERVAL * 0.65)) {
+      return;
+    }
+    this._pollInFlight = true;
+    try {
+      const names = this.pollNames();
+      const url = names.length
+        ? `/mikrotik/interfaces/monitor-selected?names=${encodeURIComponent(names.join(','))}`
+        : '/mikrotik/interfaces/monitor';
+      const data = await App.api(_withDev(url));
+      if (!data?.success) return;
+      this.applyTrafficStats(Array.isArray(data.data) ? data.data : [], names);
+    } catch (e) {
+      console.warn('pollTraffic', e);
+    } finally {
+      this._pollInFlight = false;
+    }
   },
 
   startPolling() {
-    const interval = parseInt(document.getElementById('pollInterval').value) || 5000;
+    const sel = document.getElementById('pollInterval');
+    const interval = parseInt(sel && sel.value, 10) || 2000;
     this.INTERVAL = interval;
-    this.MAX_PTS = Math.max(10, Math.ceil(this.timeMin * 60 * 1000 / this.INTERVAL));
+    this.MAX_PTS = Math.max(20, Math.ceil(this.timeMin * 60 * 1000 / this.INTERVAL));
     if (this.pollTimer) clearInterval(this.pollTimer);
     this.pollTimer = setInterval(() => this.pollTraffic(), interval);
+    this.syncSocketMonitor();
+    if (this.apexChart) {
+      try {
+        this.apexChart.updateOptions({
+          chart: { animations: { enabled: true, easing: 'linear', dynamicAnimation: { speed: this.animSpeed() } } }
+        }, false, false);
+      } catch (_) {}
+    }
   },
 
   renderCards() {
@@ -255,16 +343,51 @@ const TrafficPage = {
   toggleSelect(name) {
     if (this.selected.has(name)) {
       this.selected.delete(name);
+      delete this.bufPer[name];
     } else {
       if (this.selected.size >= 8) { alert('Maksimal 8 interface untuk live chart'); return; }
       this.selected.add(name);
     }
-    this.buf = { rx:[], tx:[], ts:[] };
-    this.bufPer = {};
-    if (this.apexChart) { try { this.apexChart.destroy(); } catch(e) {} this.apexChart = null; }
+    this.recomputeAggregateBuf();
     this.updateSelectionUI();
     this.toggleChartVisibility();
     this.refreshPerIfLegend();
+    this.syncSocketMonitor();
+    if (this.selected.size) {
+      if (this.apexChart) this.updateChartSeries();
+      else this.createChart();
+    }
+  },
+
+  // Rebuild aggregate series dari buffer per-interface yang masih di-track
+  // supaya grafik tidak reset setiap kali user klik Track.
+  recomputeAggregateBuf() {
+    const names = Array.from(this.selected);
+    if (!names.length) {
+      this.buf = { rx: [], tx: [], ts: [] };
+      return;
+    }
+    const tsSet = new Set();
+    names.forEach(n => {
+      const b = this.bufPer[n];
+      if (b && b.ts) b.ts.forEach(t => tsSet.add(t));
+    });
+    const ts = Array.from(tsSet).sort((a, b) => a - b).slice(-this.MAX_PTS);
+    const rx = [], tx = [];
+    ts.forEach(t => {
+      let sRx = 0, sTx = 0;
+      names.forEach(n => {
+        const b = this.bufPer[n];
+        if (!b) return;
+        const idx = b.ts.indexOf(t);
+        if (idx >= 0) {
+          sRx += b.rx[idx] || 0;
+          sTx += b.tx[idx] || 0;
+        }
+      });
+      rx.push(sRx); tx.push(sTx);
+    });
+    this.buf = { rx, tx, ts };
   },
 
   updateSelectionUI() {
@@ -287,16 +410,18 @@ const TrafficPage = {
   toggleChartVisibility() {
     const chartEl  = document.getElementById('mainChart');
     const emptyMsg = document.getElementById('emptyChart');
+    this.applyChartHeight();
     if (this.selected.size > 0) {
-      chartEl.style.display  = 'block';
-      emptyMsg.style.display = 'none';
+      if (chartEl) chartEl.style.display  = 'block';
+      if (emptyMsg) emptyMsg.style.display = 'none';
       ['tc-rx-cur','tc-tx-cur','tc-rx-avg','tc-tx-avg','tc-rx-max','tc-tx-max'].forEach(id => {
-        const el = document.getElementById(id); if (el) el.textContent = '0';
+        const el = document.getElementById(id); if (el && !this.buf.rx.length) el.textContent = '0';
       });
     } else {
-      chartEl.style.display  = 'none';
-      emptyMsg.style.display = 'flex';
+      if (chartEl) chartEl.style.display  = 'none';
+      if (emptyMsg) emptyMsg.style.display = 'flex';
       if (this.apexChart) { try { this.apexChart.destroy(); } catch(e) {} this.apexChart = null; }
+      this.setLive(false);
     }
   },
 
@@ -466,7 +591,8 @@ const TrafficPage = {
     const options = {
       chart: {
         type: 'area',
-        height: 360,
+        height: this.applyChartHeight(),
+        width: '100%',
         background: 'transparent',
         toolbar: { show: false },
         fontFamily: "'Plus Jakarta Sans', sans-serif",
@@ -474,9 +600,11 @@ const TrafficPage = {
         animations: {
           enabled: true,
           easing: 'linear',
-          dynamicAnimation: { speed: 350 }
+          dynamicAnimation: { speed: this.animSpeed() }
         },
         sparkline: { enabled: false },
+        redrawOnParentResize: true,
+        redrawOnWindowResize: true,
         dropShadow: {
           enabled: true,
           top: 2,
@@ -515,10 +643,13 @@ const TrafficPage = {
       },
       xaxis: {
         type: 'datetime',
+        range: this.chartRangeMs(),
         labels: {
           style: { fontSize: '10px', colors: '#94a3b8', fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 600 },
           datetimeUTC: false,
-          format: 'HH:mm:ss'
+          format: 'HH:mm:ss',
+          rotate: window.innerWidth <= 768 ? -35 : 0,
+          hideOverlappingLabels: true
         },
         axisBorder: { show: false },
         axisTicks: { show: false },
@@ -528,10 +659,11 @@ const TrafficPage = {
         }
       },
       yaxis: {
-        tickAmount: 5,
+        tickAmount: window.innerWidth <= 768 ? 4 : 5,
         forceNiceScale: true,
         labels: {
           style: { fontSize: '10px', colors: '#94a3b8', fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 600 },
+          maxWidth: window.innerWidth <= 480 ? 56 : 72,
           // TX negatif, tampilkan nilai absolut
           formatter: v => bpsShort(Math.abs(v))
         }
@@ -567,12 +699,11 @@ const TrafficPage = {
     if (!this.apexChart) return;
     try {
       const series = this.buildSeries();
-      this.apexChart.updateSeries(series, false);
+      this.apexChart.updateSeries(series, true);
 
       if (this.chartMode === 'aggregate') {
-        const ann = this.buildAnnotations();
         this.apexChart.updateOptions({
-          annotations: ann,
+          annotations: this.buildAnnotations(),
           colors: series.map(s => s.color)
         }, false, false);
       } else {
@@ -605,7 +736,7 @@ const TrafficPage = {
   // ── Time range 1m / 5m / 10m / 30m ──────────────────────────
   setTimeRange(min) {
     this.timeMin = min;
-    this.MAX_PTS = Math.max(10, Math.ceil(min * 60 * 1000 / this.INTERVAL));
+    this.MAX_PTS = Math.max(20, Math.ceil(min * 60 * 1000 / this.INTERVAL));
     while (this.buf.rx.length > this.MAX_PTS) {
       this.buf.rx.shift(); this.buf.tx.shift(); this.buf.ts.shift();
     }
@@ -617,7 +748,12 @@ const TrafficPage = {
     document.querySelectorAll('.tc-time-btn').forEach(btn => {
       btn.classList.toggle('active', +btn.dataset.min === min);
     });
-    if (this.apexChart) this.updateChartSeries();
+    if (this.apexChart) {
+      try {
+        this.apexChart.updateOptions({ xaxis: { range: this.chartRangeMs() } }, false, false);
+      } catch (_) {}
+      this.updateChartSeries();
+    }
   },
 
   bindTimeRange() {
@@ -670,12 +806,13 @@ const TrafficPage = {
     document.getElementById('btnSelectAll').addEventListener('click', () => {
       this.selected.clear();
       this.interfaces.filter(i => i.running).slice(0, 8).forEach(i => this.selected.add(i.name));
-      this.buf = { rx:[], tx:[], ts:[] };
-      this.bufPer = {};
+      this.recomputeAggregateBuf();
       if (this.apexChart) { try { this.apexChart.destroy(); } catch(e) {} this.apexChart = null; }
       this.updateSelectionUI();
       this.toggleChartVisibility();
       this.refreshPerIfLegend();
+      this.syncSocketMonitor();
+      if (this.selected.size) this.createChart();
     });
     document.getElementById('btnClearAll').addEventListener('click', () => {
       this.selected.clear();
@@ -684,8 +821,76 @@ const TrafficPage = {
       this.updateSelectionUI();
       this.toggleChartVisibility();
       this.refreshPerIfLegend();
+      this.syncSocketMonitor();
     });
     document.getElementById('pollInterval').addEventListener('change', () => this.startPolling());
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) return;
+      this._lastSocket = 0;
+      this.pollTraffic();
+      this.syncSocketMonitor();
+    });
+  },
+
+  bindChartResize() {
+    const host = document.getElementById('mainChartSection') || document.getElementById('mainChart');
+    if (!host) return;
+    const onResize = () => {
+      clearTimeout(this._resizeTimer);
+      this._resizeTimer = setTimeout(() => {
+        if (!this.apexChart) { this.applyChartHeight(); return; }
+        try {
+          this.apexChart.updateOptions({
+            chart: { height: this.applyChartHeight() },
+            xaxis: { range: this.chartRangeMs() }
+          }, false, false);
+        } catch (_) {
+          try { this.apexChart.resize(); } catch (__) {}
+        }
+      }, 80);
+    };
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onResize);
+    if (typeof ResizeObserver !== 'undefined' && !this._resizeObs) {
+      try {
+        this._resizeObs = new ResizeObserver(onResize);
+        this._resizeObs.observe(host);
+      } catch (_) {}
+    }
+  },
+
+  bindSocket() {
+    if (this._sock) return;
+    const sock = (window.App && App.socket)
+      || (typeof io === 'function' ? io({ auth: { token: App.token }, transports: ['websocket', 'polling'] }) : null);
+    if (!sock) return;
+    this._sock = sock;
+    sock.on('interface:traffic_update', (payload) => {
+      if (window.MikrotikSelector && window.MikrotikSelector.getSelectedId) {
+        const activeId = String(window.MikrotikSelector.getSelectedId() || '');
+        const msgId = String((payload && (payload.device_id || payload.deviceId)) || '');
+        if (activeId && msgId && activeId !== msgId) return;
+      }
+      const stats = (payload && payload.data) || [];
+      this._lastSocket = Date.now();
+      this.applyTrafficStats(stats, this.pollNames());
+    });
+    sock.on('connect', () => this.syncSocketMonitor());
+  },
+
+  syncSocketMonitor() {
+    if (!this._sock || !this._sock.connected) return;
+    const names = this.pollNames();
+    this._sock.emit('interface:stop_monitor');
+    if (!names.length) return;
+    const deviceId = window.MikrotikSelector && window.MikrotikSelector.getSelectedId
+      ? window.MikrotikSelector.getSelectedId()
+      : null;
+    this._sock.emit('interface:start_monitor', {
+      interfaces: names,
+      interval: Math.max(this.INTERVAL, 2000),
+      device_id: deviceId ? parseInt(deviceId, 10) : null
+    });
   }
 };
 
