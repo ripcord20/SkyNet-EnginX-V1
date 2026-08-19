@@ -234,17 +234,41 @@
     .chart-live .live-dot { width:6px; height:6px; border-radius:50%; background:#dc2626; animation:pulse 2s ease-in-out infinite; }
 
     .chart-body { padding:8px 12px 12px; }
-    .chart-area { height:360px; }
+    .chart-area { height:360px; width:100%; overflow:hidden; }
+    .chart-area .apexcharts-canvas { width:100% !important; max-width:100%; }
+    .chart-hdr-r { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 
     /* Empty state */
     .empty-chart { height:360px; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:8px; color:var(--faint); }
     .empty-chart svg { width:32px; height:32px; opacity:.4; }
-    .empty-chart p { font-size:13px; margin:0; }
+    .empty-chart p { font-size:13px; margin:0; text-align:center; padding:0 16px; }
+
+    .iface-card.selected { border-color:#93c5fd; box-shadow:0 0 0 3px rgba(37,99,235,.12); }
+    .iface-card.selected::before { background:var(--tf-blue); }
 
     @media(max-width:768px) {
-      .chart-hdr { flex-direction:column; align-items:flex-start; }
-      .chart-stats { gap:8px; }
+      .chart-hdr { flex-direction:column; align-items:flex-start; padding:12px 12px 10px; gap:8px; }
+      .chart-hdr-r { width:100%; }
+      .chart-stats {
+        width:100%;
+        display:grid;
+        grid-template-columns:repeat(3, minmax(0,1fr));
+        gap:6px 8px;
+      }
+      .chart-stat { min-width:0; }
       .chart-stat-val { font-size:10.5px; }
+      .tc-mode-btns, .tc-time-btns { flex:1 1 auto; justify-content:stretch; }
+      .tc-mode-btn, .tc-time-btn { flex:1; justify-content:center; }
+      .chart-area, .empty-chart { height:240px; }
+      .chart-body { padding:4px 6px 8px; }
+      .tf-hdr { margin-bottom:16px; }
+      .card-spark { display:none; }
+    }
+    @media(max-width:480px) {
+      .chart-area, .empty-chart { height:200px; }
+      .chart-stats { grid-template-columns:repeat(2, minmax(0,1fr)); }
+      .tc-mode-btn { font-size:10px; padding:4px 6px; }
+      .interval-wrap select { max-width:72px; }
     }
 
     /* Loading */
@@ -278,8 +302,8 @@
           <div class="interval-wrap">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
             <select id="pollInterval">
-              <option value="2000">2s</option>
-              <option value="5000" selected>5s</option>
+              <option value="2000" selected>2s</option>
+              <option value="5000">5s</option>
               <option value="10000">10s</option>
             </select>
           </div>
@@ -388,10 +412,11 @@
         <div class="chart-hdr">
           <div class="chart-hdr-l">
             <h3>Real Time Traffic</h3>
+            <span class="chart-live" id="chartLiveChip" style="display:none"><span class="live-dot"></span>Live</span>
             <span class="chart-mini-legend rx" id="legend-rx-agg"><span class="swatch-line" style="background:#06b6d4"></span>RX</span>
             <span class="chart-mini-legend tx" id="legend-tx-agg" style="color:#f59e0b"><span class="swatch-line" style="background:#f59e0b"></span>TX</span>
           </div>
-          <div class="chart-hdr-r" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <div class="chart-hdr-r">
             <div class="chart-stats" id="chartAggStats">
               <span class="chart-stat"><span class="chart-stat-lbl">↓ RX</span><span class="chart-stat-val rx-color" id="tc-rx-cur" style="color:#06b6d4">0</span></span>
               <span class="chart-stat"><span class="chart-stat-lbl">↑ TX</span><span class="chart-stat-val tx-color" id="tc-tx-cur" style="color:#f59e0b">0</span></span>
@@ -451,6 +476,7 @@
     </main>
   </div>
 </div>
+<script src="/socket.io/socket.io.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/apexcharts@3.45.2/dist/apexcharts.min.js"></script>
 <script src="/js/app.js"></script>
 <script src="/js/mikrotik-selector.js"></script>
