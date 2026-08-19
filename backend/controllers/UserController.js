@@ -1,6 +1,7 @@
 const { User, Role, Permission, RolePermission } = require('../models');
 const { Op } = require('sequelize');
 const { paginateResponse } = require('../utils/helpers');
+const { invalidateAuthUserCache } = require('../utils/authUserCache');
 
 class UserController {
   // List users
@@ -80,6 +81,7 @@ class UserController {
       }
 
       await user.update(payload);
+      invalidateAuthUserCache(user.id);
 
       const updated = await User.findByPk(user.id, {
         include: [{ model: Role, as: 'role' }]
@@ -99,6 +101,7 @@ class UserController {
         return res.status(400).json({ success: false, message: 'Cannot delete yourself' });
       }
       await user.destroy();
+      invalidateAuthUserCache(user.id);
       res.json({ success: true, message: 'User deleted' });
     } catch (error) {
       res.status(500).json({ success: false, message: error.message });
@@ -126,6 +129,7 @@ class UserController {
         const rolePerms = permissions.map(pid => ({ role_id: role.id, permission_id: pid }));
         await RolePermission.bulkCreate(rolePerms);
       }
+      invalidateAuthUserCache();
       const full = await Role.findByPk(role.id, {
         include: [{ model: Permission, as: 'permissions', through: { attributes: [] } }]
       });
@@ -153,6 +157,7 @@ class UserController {
       const full = await Role.findByPk(role.id, {
         include: [{ model: Permission, as: 'permissions', through: { attributes: [] } }]
       });
+      invalidateAuthUserCache();
       res.json({ success: true, data: full });
     } catch (error) {
       res.status(400).json({ success: false, message: error.message });
@@ -172,6 +177,7 @@ class UserController {
 
       await RolePermission.destroy({ where: { role_id: role.id } });
       await role.destroy();
+      invalidateAuthUserCache();
       res.json({ success: true, message: 'Role deleted' });
     } catch (error) {
       res.status(500).json({ success: false, message: error.message });

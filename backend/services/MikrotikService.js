@@ -6,7 +6,7 @@
 const axios = require('axios');
 const logger = require('../utils/logger');
 const { MikrotikApiClient } = require('./MikrotikApiClient');
-const { parseResource, unwrapRestData, unwrapSingleton } = require('../utils/mikrotikResource');
+const { parseResource, unwrapRestData, unwrapSingleton, mapInterfaceRow } = require('../utils/mikrotikResource');
 
 /**
  * Port → protokol detection (FALLBACK MODE — dipakai kalau caller tidak
@@ -700,110 +700,7 @@ class MikrotikService {
   // ── INTERFACES ─────────────────────────────────────────────
   async getInterfaces() {
     const ifaces = await this.get('/interface');
-    return (Array.isArray(ifaces) ? ifaces : []).map(i => ({
-      id: i['.id'], name: i.name, type: i.type || 'ether',
-      mtu: i.mtu || 1500, running: i.running === 'true',
-      disabled: i.disabled === 'true', comment: i.comment || '',
-      macAddress: i['mac-address'] || '',
-      txByte: parseInt(i['tx-byte']) || 0, rxByte: parseInt(i['rx-byte']) || 0,
-      txPacket: parseInt(i['tx-packet']) || 0, rxPacket: parseInt(i['rx-packet']) || 0
-    }));
-  }
-
-  // ── WireGuard ──────────────────────────────────────────────
-  _mapWgIface(i) {
-    const flag = v => v === true || v === 'true' || v === 'yes';
-    return {
-      id: i['.id'],
-      name: i.name || '',
-      listenPort: i['listen-port'] || '',
-      publicKey: i['public-key'] || '',
-      privateKey: i['private-key'] || '',
-      mtu: i.mtu || '',
-      running: flag(i.running),
-      disabled: flag(i.disabled),
-      comment: i.comment || '',
-    };
-  }
-  _mapWgPeer(p) {
-    const flag = v => v === true || v === 'true' || v === 'yes';
-    return {
-      id: p['.id'],
-      interface: p.interface || '',
-      publicKey: p['public-key'] || '',
-      privateKey: p['private-key'] || '',
-      allowedAddress: p['allowed-address'] || '',
-      endpointAddress: p['endpoint-address'] || '',
-      endpointPort: p['endpoint-port'] || '',
-      currentEndpoint: p['current-endpoint-address'] || '',
-      lastHandshake: p['last-handshake'] || '',
-      rx: parseInt(p.rx) || 0,
-      tx: parseInt(p.tx) || 0,
-      keepalive: p['persistent-keepalive'] || '',
-      comment: p.comment || '',
-      disabled: flag(p.disabled),
-    };
-  }
-  async getWireGuardInterfaces() {
-    const rows = await this.get('/interface/wireguard');
-    return (Array.isArray(rows) ? rows : []).map(r => this._mapWgIface(r));
-  }
-  async getWireGuardPeers() {
-    const rows = await this.get('/interface/wireguard/peers');
-    return (Array.isArray(rows) ? rows : []).map(r => this._mapWgPeer(r));
-  }
-  async createWireGuardInterface(data = {}) {
-    const body = {};
-    if (data.name) body.name = String(data.name).trim();
-    if (data.listenPort || data['listen-port']) body['listen-port'] = String(data.listenPort || data['listen-port']);
-    if (data.mtu) body.mtu = String(data.mtu);
-    if (data.privateKey || data['private-key']) body['private-key'] = data.privateKey || data['private-key'];
-    if (data.comment) body.comment = data.comment;
-    return this.post('/interface/wireguard', body);
-  }
-  async updateWireGuardInterface(id, data = {}) {
-    const enc = encodeURIComponent(id);
-    const body = {};
-    if (data.name != null) body.name = String(data.name).trim();
-    if (data.listenPort != null || data['listen-port'] != null) body['listen-port'] = String(data.listenPort || data['listen-port'] || '');
-    if (data.mtu != null) body.mtu = String(data.mtu);
-    if (data.comment != null) body.comment = data.comment;
-    if (data.disabled != null) body.disabled = data.disabled ? 'true' : 'false';
-    try { return await this.patch(`/interface/wireguard/${enc}`, body); }
-    catch (e) { return this.post(`/interface/wireguard/${enc}/set`, body); }
-  }
-  async deleteWireGuardInterface(id) {
-    return this.delete(`/interface/wireguard/${encodeURIComponent(id)}`);
-  }
-  async createWireGuardPeer(data = {}) {
-    const body = {};
-    if (data.interface) body.interface = data.interface;
-    if (data.publicKey || data['public-key']) body['public-key'] = data.publicKey || data['public-key'];
-    if (data.privateKey || data['private-key']) body['private-key'] = data.privateKey || data['private-key'];
-    if (data.allowedAddress || data['allowed-address']) body['allowed-address'] = data.allowedAddress || data['allowed-address'];
-    if (data.endpointAddress || data['endpoint-address']) body['endpoint-address'] = data.endpointAddress || data['endpoint-address'];
-    if (data.endpointPort || data['endpoint-port']) body['endpoint-port'] = String(data.endpointPort || data['endpoint-port']);
-    if (data.keepalive || data['persistent-keepalive']) body['persistent-keepalive'] = data.keepalive || data['persistent-keepalive'];
-    if (data.comment) body.comment = data.comment;
-    if (data.presharedKey || data['preshared-key']) body['preshared-key'] = data.presharedKey || data['preshared-key'];
-    return this.post('/interface/wireguard/peers', body);
-  }
-  async updateWireGuardPeer(id, data = {}) {
-    const enc = encodeURIComponent(id);
-    const body = {};
-    if (data.interface != null) body.interface = data.interface;
-    if (data.publicKey != null || data['public-key'] != null) body['public-key'] = data.publicKey || data['public-key'];
-    if (data.allowedAddress != null || data['allowed-address'] != null) body['allowed-address'] = data.allowedAddress || data['allowed-address'] || '';
-    if (data.endpointAddress != null || data['endpoint-address'] != null) body['endpoint-address'] = data.endpointAddress || data['endpoint-address'] || '';
-    if (data.endpointPort != null || data['endpoint-port'] != null) body['endpoint-port'] = String(data.endpointPort || data['endpoint-port'] || '');
-    if (data.keepalive != null || data['persistent-keepalive'] != null) body['persistent-keepalive'] = data.keepalive || data['persistent-keepalive'] || '';
-    if (data.comment != null) body.comment = data.comment;
-    if (data.disabled != null) body.disabled = data.disabled ? 'true' : 'false';
-    try { return await this.patch(`/interface/wireguard/peers/${enc}`, body); }
-    catch (e) { return this.post(`/interface/wireguard/peers/${enc}/set`, body); }
-  }
-  async deleteWireGuardPeer(id) {
-    return this.delete(`/interface/wireguard/peers/${encodeURIComponent(id)}`);
+    return (Array.isArray(ifaces) ? ifaces : []).map(mapInterfaceRow);
   }
 
   // ── IP SCAN (Tools > IP Scan) ──────────────────────────────

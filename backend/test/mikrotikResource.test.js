@@ -51,4 +51,52 @@ assert.strictEqual(listKept.length, 2);
 assert.strictEqual(formatSnmpUptime(76098000), '8d 19h 23m');
 assert.strictEqual(formatSnmpUptime('1w1d19h23m43s'), '1w1d19h23m43s');
 
+const {
+  mikrotikFlag,
+  mapInterfaceRow,
+  isMikrotikApiCapable,
+  presentNmsRouter,
+} = require('../utils/mikrotikResource');
+
+// Bug lama: REST v7 kirim boolean true, mapper cek string === 'true' → semua iface "down"
+function legacyRunning(v) { return v === 'true'; }
+assert.strictEqual(legacyRunning(true), false, 'repro: REST boolean running dianggap down');
+assert.strictEqual(legacyRunning('true'), true);
+assert.strictEqual(mikrotikFlag(true), true, 'fix: boolean running harus true');
+
+const restIfaces = [
+  { name: 'ether1', running: true, disabled: false },
+  { name: 'ether2', running: false, disabled: false },
+  { name: 'bridge1', running: 'true', disabled: 'false' },
+].map(mapInterfaceRow);
+const runningNames = restIfaces.filter(i => i.running && !i.disabled).map(i => i.name);
+assert.deepStrictEqual(runningNames, ['ether1', 'bridge1'], 'monitorAll tidak boleh kosong karena boolean REST');
+
+assert.strictEqual(mikrotikFlag(true), true);
+assert.strictEqual(mikrotikFlag('true'), true);
+assert.strictEqual(mikrotikFlag('yes'), true);
+assert.strictEqual(mikrotikFlag(false), false);
+assert.strictEqual(mikrotikFlag('false'), false);
+
+const restIface = mapInterfaceRow({ name: 'ether1', type: 'ether', running: true, disabled: false, 'rx-byte': '100' });
+assert.strictEqual(restIface.running, true, 'REST boolean running harus true');
+assert.strictEqual(restIface.disabled, false);
+assert.strictEqual(restIface.rxByte, 100);
+
+const apiIface = mapInterfaceRow({ name: 'sfp-sfpplus1', running: 'true', disabled: 'false' });
+assert.strictEqual(apiIface.running, true, 'binary API string running=true');
+
+assert.strictEqual(isMikrotikApiCapable({ type: 'router', api_port: 80 }), false, 'port saja tidak cukup');
+assert.strictEqual(isMikrotikApiCapable({ type: 'router', monitoring_type: 'api' }), false, 'tanpa username tidak bisa REST');
+assert.strictEqual(isMikrotikApiCapable({ type: 'router', api_username: 'admin' }), true);
+assert.strictEqual(isMikrotikApiCapable({ type: 'router', api_username: '  ' }), false);
+
+const snmpOnly = presentNmsRouter({ id: 1, name: 'GANANET', ip_address: '141.11.241.96', type: 'router', api_port: 80, status: 'online' });
+assert.strictEqual(snmpOnly.api_ready, false);
+assert.ok(snmpOnly.api_hint);
+
+const apiReady = presentNmsRouter({ id: 2, name: 'ACS', ip_address: '192.168.22.1', type: 'router', api_username: 'admin', status: 'online' });
+assert.strictEqual(apiReady.api_ready, true);
+assert.strictEqual(apiReady.api_hint, null);
+
 console.log('mikrotikResource.test.js ok');

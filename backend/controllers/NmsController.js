@@ -14,6 +14,7 @@
  */
 const { NmsInterfacePreset, Device } = require('../models');
 const { getMikrotikInstanceByDevice } = require('../services/MikrotikService');
+const { presentNmsRouter, isMikrotikApiCapable } = require('../utils/mikrotikResource');
 const logger = require('../utils/logger');
 
 const PALETTE = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16'];
@@ -21,16 +22,9 @@ const PALETTE = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4
 const NmsController = {
 
   // ── Daftar router MikroTik yang bisa dipantau ───────────────────
-  // NMS butuh akses API (REST atau Binary) untuk baca traffic interface.
-  // Router dianggap "API-capable" bila ada minimal satu indikator API:
-  //   - monitoring_type 'api'/'both', ATAU
-  //   - api_protocol terisi (rest-http/rest-https/api-plain/api-ssl), ATAU
-  //   - api_username terisi, ATAU
-  //   - api_port terisi
-  // Sengaja longgar: konfigurasi API di Device Management bisa bervariasi
-  // (REST tanpa set monitoring_type, dsb). Auth sebenarnya akan di-resolve
-  // oleh getMikrotikInstanceByDevice (yang juga bisa fallback ke kredensial
-  // env). Tambah ?debug=1 untuk melihat alasan device di-skip.
+  // Traffic/NMS butuh REST/API username. api_port=80 default form SNMP
+  // TIDAK cukup — itu yang bikin picker "ada router" lalu gagal load iface.
+  // Kembalikan SEMUA router + api_ready supaya UI bisa jelaskan SNMP-only.
   async routers(req, res) {
     try {
       const debug = req.query.debug === '1' || req.query.all === '1';
@@ -40,28 +34,12 @@ const NmsController = {
         order: [['name', 'ASC']]
       });
 
-      const isApiCapable = (r) => {
-        const monApi  = ['api', 'both'].includes(r.monitoring_type);
-        const hasProto = !!r.api_protocol;
-        const hasUser  = !!r.api_username;
-        const hasPort  = !!r.api_port;
-        return monApi || hasProto || hasUser || hasPort;
-      };
-
-      const eligible = rows.filter(isApiCapable);
-      const data = eligible.map(r => ({
-        id: r.id,
-        name: r.name,
-        ip_address: r.ip_address,
-        status: r.status,
-        api_protocol: r.api_protocol || null
-      }));
-
+      const data = rows.map(r => presentNmsRouter(r.toJSON ? r.toJSON() : r));
       const payload = { success: true, data };
       if (debug) {
         payload.debug = {
           total_router: rows.length,
-          eligible: eligible.length,
+          eligible: data.filter(d => d.api_ready).length,
           all: rows.map(r => ({
             id: r.id, name: r.name, type: 'router',
             monitoring_type: r.monitoring_type,
@@ -69,7 +47,7 @@ const NmsController = {
             api_username: r.api_username ? '(set)' : null,
             api_port: r.api_port,
             is_active: r.is_active,
-            eligible: isApiCapable(r)
+            eligible: isMikrotikApiCapable(r)
           }))
         };
       }
