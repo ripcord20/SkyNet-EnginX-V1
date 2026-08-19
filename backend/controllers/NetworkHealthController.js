@@ -5,6 +5,31 @@ const { NetworkHealthSnapshot, NetworkHealthSample, Device, InfrastructurePoint 
 const { Op } = require('sequelize');
 const { INFRA_DEVICE_TYPES } = require('../utils/networkHealthMetrics');
 
+function asJsonArray(v) {
+  if (Array.isArray(v)) return v;
+  if (v == null || v === '') return [];
+  if (typeof v === 'string') {
+    try {
+      const parsed = JSON.parse(v);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+      return [];
+    }
+  }
+  return [];
+}
+
+function asJsonObject(v) {
+  if (v && typeof v === 'object' && !Array.isArray(v)) return v;
+  if (typeof v === 'string' && v.trim()) {
+    try {
+      const parsed = JSON.parse(v);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+    } catch (_) {}
+  }
+  return {};
+}
+
 exports.status = async (req, res) => {
   try {
     const cfg = await Collector.getConfig();
@@ -85,7 +110,7 @@ exports.overview = async (req, res) => {
     const devices = rows.map((d) => {
       const j = d.toJSON();
       const snap = j.health_snapshot || null;
-      const details = (snap && snap.details) || {};
+      const details = asJsonObject(snap && snap.details);
       return {
         id: j.id,
         name: j.name,
@@ -112,7 +137,7 @@ exports.overview = async (req, res) => {
         ifaceDrops: snap ? snap.iface_drops : 0,
         ifaceDown: snap ? snap.iface_down : 0,
         details,
-        alerts: (snap && snap.alerts) || [],
+        alerts: asJsonArray(snap && snap.alerts),
         polledAt: snap ? snap.polled_at : null,
       };
     });

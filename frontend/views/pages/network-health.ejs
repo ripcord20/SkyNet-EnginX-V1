@@ -395,8 +395,10 @@ const NH = {
       tb.innerHTML = '<tr><td colspan="11" style="padding:24px;text-align:center;color:var(--nh-muted)">Belum ada perangkat infrastruktur aktif (router / switch / OLT / AP / server) di Device Management. Assign device ke POP di halaman Devices bila ingin terkait peta infrastruktur.</td></tr>';
       return;
     }
+    try {
     tb.innerHTML = rows.map(r => {
-      const al = (r.alerts||[]).map(a => a.msg).join(' · ');
+      const alerts = Array.isArray(r.alerts) ? r.alerts : [];
+      const al = alerts.map(a => (a && a.msg) || '').filter(Boolean).join(' · ');
       const apiHint = r.apiReady ? '' : '<div style="color:#b45309;font-size:10px;font-weight:700;margin-top:2px">API username belum diisi — traffic/CPU/PPPoE tidak terbaca</div>';
       const errHint = (r.details && r.details.apiError) ? '<div style="color:#dc2626;font-size:10px;margin-top:2px">' + this.esc(r.details.apiError) + '</div>' : '';
       const pppoeN = Number(r.details && r.details.pppoe && r.details.pppoe.active) || 0;
