@@ -87,6 +87,23 @@
     .skel{background:linear-gradient(90deg,#e7edf6 25%,#f2f6fb 50%,#e7edf6 75%);background-size:200% 100%;animation:sh 1.3s infinite;border-radius:8px;}
     @keyframes sh{0%{background-position:200% 0;}100%{background-position:-200% 0;}}
     .hint{font-size:11px;color:var(--muted);margin-top:7px;padding:0 2px;}
+    .inv-debt{font-size:10.5px;font-weight:800;color:#c2410c;margin-top:3px;}
+
+    .dur-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:8px;}
+    .dpill{text-align:center;padding:9px 4px;border-radius:11px;border:1.5px solid var(--line);font-size:11.5px;font-weight:800;cursor:pointer;background:#fff;color:#3a4a68;user-select:none;font-family:inherit;}
+    .dpill.active{border-color:var(--blue);background:var(--blue-soft);color:var(--blue);}
+    @media(max-width:400px){.dur-grid{grid-template-columns:repeat(2,1fr);}}
+
+    .debt-box{display:none;margin-top:12px;padding:13px 14px;background:#fff7ed;border:1.5px solid #fdba74;border-radius:15px;}
+    .debt-box.show{display:block;}
+    .debt-row{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+    .debt-lbl{font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#c2410c;}
+    .debt-val{font-size:16px;font-weight:800;color:#9a3412;}
+    .debt-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;flex-wrap:wrap;}
+    .debt-check{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:#9a3412;cursor:pointer;}
+    .debt-check input{accent-color:#ea580c;width:16px;height:16px;}
+    .debt-pay-btn{border:1.5px solid #fdba74;background:#fff;color:#c2410c;border-radius:10px;padding:7px 11px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;}
+    .debt-hint{font-size:11px;color:#b45309;margin-top:8px;line-height:1.4;}
     .notif-check{display:flex;align-items:flex-start;gap:11px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:13px 14px;margin-bottom:9px;cursor:pointer;box-shadow:0 4px 12px -8px rgba(30,60,120,.14);}
     .notif-check input{display:none;}
     .nc-box{width:22px;height:22px;border-radius:7px;border:2px solid #cdd6e4;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .12s;margin-top:1px;}
@@ -184,6 +201,21 @@
         </div>
         <div class="hint" id="amountHint"></div>
 
+        <div class="debt-box" id="debtBox">
+          <div class="debt-row">
+            <span class="debt-lbl">Hutang pelanggan</span>
+            <span class="debt-val" id="debtVal">Rp 0</span>
+          </div>
+          <div class="debt-actions">
+            <label class="debt-check">
+              <input type="checkbox" id="payIncludeDebt" checked onchange="onIncludeDebtChange()">
+              Sertakan hutang di jumlah
+            </label>
+            <button type="button" class="debt-pay-btn" onclick="submitDebtOnly()">Bayar hutang saja</button>
+          </div>
+          <div class="debt-hint">Kurang bayar otomatis jadi hutang. Kelebihan memotong hutang. Untuk bayar sebagian, pilih durasi +3 / +7 / +15 hari.</div>
+        </div>
+
         <div class="lbl">Tanggal bayar</div>
         <div class="field">
           <input type="date" id="dateInput">
@@ -191,9 +223,15 @@
 
         <div class="lbl">Jatuh tempo berikutnya</div>
         <div class="field">
-          <input type="date" id="dueAfterInput" onchange="updateActiveUntil()">
+          <input type="date" id="dueAfterInput" onchange="onDueDateManual()">
         </div>
-        <div class="hint" id="dueAfterHint">Otomatis +1 bulan dari jatuh tempo sekarang. Ubah bila perlu.</div>
+        <div class="dur-grid" id="dueDurGrid">
+          <button type="button" class="dpill" data-dur="3d" onclick="selectDueDuration('3d', this)">+3 hari</button>
+          <button type="button" class="dpill" data-dur="7d" onclick="selectDueDuration('7d', this)">+7 hari</button>
+          <button type="button" class="dpill" data-dur="15d" onclick="selectDueDuration('15d', this)">+15 hari</button>
+          <button type="button" class="dpill active" data-dur="1m" onclick="selectDueDuration('1m', this)">+1 bulan</button>
+        </div>
+        <div class="hint" id="dueAfterHint">Otomatis +1 bulan dari jatuh tempo sekarang. Pilih durasi cepat atau ubah tanggal.</div>
 
         <div class="lbl">Metode pembayaran</div>
         <div class="methods" id="methods">
@@ -263,6 +301,7 @@
     function toast(msg,type){ const t=document.getElementById('toast'); t.textContent=msg; t.className='toast show'+(type?' '+type:''); setTimeout(()=>t.classList.remove('show'),2600); }
 
     let _selected=null, _method='cash', _amount=0, _submitting=false;
+    let _dueDurKind='1m', _invoiceTotal=0, _debt=0;
     const MONTHS=['','Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
     // Set tanggal bayar default = hari ini
     (function(){ const d=new Date(); const el=document.getElementById('dateInput'); if(el) el.value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); })();
@@ -288,12 +327,14 @@
       let dueExtra='';
       if(dd!==null){ if(dd<0)dueExtra=' · telat '+Math.abs(dd)+'h'; else if(dd===0)dueExtra=' · hari ini'; else dueExtra=' · '+dd+'h lagi'; }
       const periode=(inv.period_month&&inv.period_year)?(MONTHS[inv.period_month]+' '+inv.period_year):'';
+      const debt=Number((inv.customer&&inv.customer.carry_over_amount)||inv.carry_over_amount||0)||0;
       return '<div class="inv'+sel+'" data-id="'+inv.id+'" onclick="selectInvoice('+inv.id+')">'+
         '<div class="inv-av">'+esc(init)+'</div>'+
         '<div class="inv-body">'+
           '<div class="inv-top-row"><div class="inv-t">'+esc(nm)+'</div><span class="ist '+si.cls+'">'+si.lbl+'</span></div>'+
           '<div class="inv-s">'+esc(no)+(cid?(' · '+esc(cid)):'')+'</div>'+
           '<div class="inv-due"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>'+(periode?('Periode '+esc(periode)+' · '):'')+'JT '+fmtDueShort(inv.due_date)+dueExtra+'</div>'+
+          (debt>0?'<div class="inv-debt">Hutang '+fmtRp(debt)+'</div>':'')+
         '</div>'+
         '<div class="inv-amt">'+fmtRp(total)+'</div>'+
       '</div>';
@@ -318,18 +359,95 @@
 
     // Tambah 1 bulan dengan mempertahankan tanggal (clamp bila bulan lebih pendek).
     // Meniru addOneMonthKeepDay() di server agar default-nya sama persis.
+    function ymdPart(s){ return String(s||'').slice(0,10); }
+    function startOfToday(){ const t=new Date(); t.setHours(0,0,0,0); return t; }
+    function toYmd(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
     function addOneMonthKeepDay(dateStr){
       if(!dateStr) return '';
-      const d=new Date(dateStr);
+      const d=new Date(ymdPart(dateStr)+'T00:00:00');
       if(isNaN(d.getTime())) return '';
       const day=d.getDate();
       const target=new Date(d.getFullYear(), d.getMonth()+1, 1);
       const lastDay=new Date(target.getFullYear(), target.getMonth()+1, 0).getDate();
       target.setDate(Math.min(day, lastDay));
-      const y=target.getFullYear();
-      const m=String(target.getMonth()+1).padStart(2,'0');
-      const dd=String(target.getDate()).padStart(2,'0');
-      return y+'-'+m+'-'+dd;
+      return toYmd(target);
+    }
+    function addDaysYmd(dateStr, days){
+      const d=new Date(ymdPart(dateStr||toYmd(startOfToday()))+'T00:00:00');
+      if(isNaN(d.getTime())) return '';
+      d.setDate(d.getDate()+days);
+      return toYmd(d);
+    }
+    function customerDueStr(inv){
+      if(!inv) return '';
+      return ymdPart((inv.customer && inv.customer.due_date) || inv.due_date || '');
+    }
+    function nextDueFromKind(kind, inv){
+      const today=toYmd(startOfToday());
+      const base=customerDueStr(inv);
+      if(kind==='3d'||kind==='7d'||kind==='15d'){
+        const days=kind==='3d'?3:kind==='7d'?7:15;
+        const from=(!base || base<today) ? today : base;
+        return addDaysYmd(from, days);
+      }
+      return addOneMonthKeepDay(base || today);
+    }
+    function markDueDurationChip(kind){
+      document.querySelectorAll('#dueDurGrid .dpill').forEach(p=>{
+        p.classList.toggle('active', p.dataset.dur===kind);
+      });
+    }
+    function updateDueHint(){
+      const hint=document.getElementById('dueAfterHint');
+      if(!hint) return;
+      const base=customerDueStr(_selected);
+      const next=(document.getElementById('dueAfterInput')||{}).value||'';
+      const labels={'3d':'+3 hari','7d':'+7 hari','15d':'+15 hari','1m':'+1 bulan'};
+      if(_dueDurKind && labels[_dueDurKind]){
+        hint.textContent = base
+          ? ('Dari '+fmtDateLong(base)+' → '+(next?fmtDateLong(next):'-')+' ('+labels[_dueDurKind]+')')
+          : ('Durasi '+labels[_dueDurKind]+'. Ubah tanggal bila perlu.');
+      } else {
+        hint.textContent = next ? ('Tanggal diubah manual → '+fmtDateLong(next)) : 'Isi tanggal jatuh tempo berikutnya.';
+      }
+    }
+    function selectDueDuration(kind, el){
+      _dueDurKind=kind;
+      const dueEl=document.getElementById('dueAfterInput');
+      if(dueEl) dueEl.value=nextDueFromKind(kind, _selected);
+      if(el){
+        document.querySelectorAll('#dueDurGrid .dpill').forEach(p=>p.classList.remove('active'));
+        el.classList.add('active');
+      } else {
+        markDueDurationChip(kind);
+      }
+      updateDueHint();
+      updateActiveUntil();
+    }
+    function onDueDateManual(){
+      _dueDurKind=null;
+      markDueDurationChip(null);
+      updateDueHint();
+      updateActiveUntil();
+    }
+    function includeDebtOn(){ return !!document.getElementById('payIncludeDebt')?.checked; }
+    function applyDefaultAmount(){
+      const total=_invoiceTotal + (includeDebtOn() ? _debt : 0);
+      _amount=total;
+      const inp=document.getElementById('amountInput');
+      if(inp) inp.value=total?total.toLocaleString('id-ID'):'';
+      updateAmountDisplay();
+      const hint=document.getElementById('amountHint');
+      if(hint){
+        hint.textContent='Tagihan: '+fmtRp(_invoiceTotal)+(_debt>0?(includeDebtOn()?' + hutang '+fmtRp(_debt):' · hutang '+fmtRp(_debt)+' tidak disertakan'):'');
+      }
+    }
+    function onIncludeDebtChange(){ applyDefaultAmount(); }
+    function updateDebtBox(){
+      const box=document.getElementById('debtBox');
+      const val=document.getElementById('debtVal');
+      if(val) val.textContent=fmtRp(_debt);
+      if(box) box.classList.toggle('show', _debt>0);
     }
 
     // "Aktif sampai" = tanggal jatuh tempo BERIKUTNYA. Model bisnisnya: siklus
@@ -352,25 +470,24 @@
       document.querySelectorAll('.inv').forEach(el=>el.classList.toggle('sel', parseInt(el.dataset.id)===id));
       const total=_selected.total||_selected.amount||0;
       const nm=(_selected.customer&&_selected.customer.name)||_selected.customer_name||'Pelanggan';
+      _invoiceTotal=Number(total)||0;
+      _debt=Number((_selected.customer&&_selected.customer.carry_over_amount)||_selected.carry_over_amount||0)||0;
       document.getElementById('formArea').style.display='block';
       document.getElementById('amountInvInfo').textContent=nm+' · '+(_selected.invoice_number||('#'+_selected.id));
-      // default amount = total invoice
-      document.getElementById('amountInput').value=total.toLocaleString('id-ID');
-      _amount=total; updateAmountDisplay();
-      document.getElementById('amountHint').textContent='Tagihan: '+fmtRp(total);
+      const debtCb=document.getElementById('payIncludeDebt');
+      if(debtCb) debtCb.checked=true;
+      updateDebtBox();
+      applyDefaultAmount();
 
       // Jatuh tempo BERIKUTNYA (default +1 bulan dari jatuh tempo pelanggan saat
-      // ini; fallback ke jatuh tempo invoice). Ini yang membuat status pelanggan
-      // keluar dari 'overdue' setelah bayar.
-      const custDue=(_selected.customer && _selected.customer.due_date) || null;
-      const baseDue=custDue || _selected.due_date || null;
-      const nextDue=addOneMonthKeepDay(baseDue);
+      // ini; fallback ke jatuh tempo invoice). Chip durasi bisa memendekkan
+      // perpanjangan bila bayar sebagian / hutang.
+      _dueDurKind='1m';
       const dueEl=document.getElementById('dueAfterInput');
       if(dueEl){
-        dueEl.value=nextDue||'';
-        document.getElementById('dueAfterHint').textContent =
-          baseDue ? ('Dari jatuh tempo '+fmtDateLong(baseDue)+' → '+(nextDue?fmtDateLong(nextDue):'-'))
-                  : 'Isi tanggal jatuh tempo berikutnya.';
+        dueEl.value=nextDueFromKind('1m', _selected);
+        markDueDurationChip('1m');
+        updateDueHint();
       }
 
       // Info periode & masa aktif
@@ -425,6 +542,44 @@
       _t=setTimeout(()=>loadInvoices(v), 350);
     });
 
+    async function submitDebtOnly(){
+      if(_submitting) return;
+      if(!_selected){ toast('Pilih invoice dulu','err'); return; }
+      if(!_debt || _debt<=0){ toast('Tidak ada hutang yang bisa dilunasi','err'); return; }
+      const nm=(_selected.customer&&_selected.customer.name)||_selected.customer_name||'Pelanggan';
+      if(!confirm('Lunasi hutang '+nm+' sebesar '+fmtRp(_debt)+'?\nInvoice periode tidak ikut dilunasi.')) return;
+      const custId=(_selected.customer && _selected.customer.id) || _selected.customer_id || null;
+      if(!custId){ toast('Data pelanggan tidak ditemukan pada invoice ini','err'); return; }
+
+      _submitting=true;
+      const btn=document.getElementById('submitBtn'); btn.disabled=true; btn.textContent='Menyimpan…';
+      const wantWa=document.getElementById('sendWa').checked && !document.getElementById('sendWa').disabled;
+      const wantEmail=document.getElementById('sendEmail').checked && !document.getElementById('sendEmail').disabled;
+      const r=await api('/api/payments/record', { method:'POST', body:JSON.stringify({
+        customer_id: custId,
+        amount: _debt,
+        payment_date: document.getElementById('dateInput').value || undefined,
+        method: _method,
+        bank: '',
+        reference_no: '',
+        due_date_after: (document.getElementById('dueAfterInput')||{}).value || undefined,
+        debt_only: 1,
+        send_wa: wantWa ? 1 : 0,
+        send_email: wantEmail ? 1 : 0,
+        notes: document.getElementById('noteInput').value || '',
+        period_month: _selected.period_month,
+        period_year: _selected.period_year
+      })});
+      _submitting=false; btn.disabled=false; btn.textContent='Simpan Pembayaran';
+      if(r && r.data && r.data.success){
+        toast(r.data.message || 'Hutang dilunasi','ok');
+        try{ if(window.parent && window.parent!==window){ window.parent.postMessage({type:'payment-saved'},'*'); } }catch(_){}
+        resetForm();
+      } else {
+        toast((r&&r.data&&r.data.message)||'Gagal pelunasan hutang','err');
+      }
+    }
+
     async function submitPayment(){
       if(_submitting) return;
       if(!_selected){ toast('Pilih invoice dulu','err'); return; }
@@ -459,6 +614,7 @@
         bank:          '',
         reference_no:  '',
         due_date_after: dueAfter,
+        include_debt: includeDebtOn() ? 1 : 0,
         send_wa:       wantWa ? 1 : 0,
         send_email:    wantEmail ? 1 : 0,
         notes:         document.getElementById('noteInput').value || '',
@@ -494,13 +650,16 @@
 
     function resetForm(){
       document.getElementById('successOverlay').classList.remove('show');
-      _selected=null; _amount=0; _method='cash';
+      _selected=null; _amount=0; _method='cash'; _dueDurKind='1m'; _invoiceTotal=0; _debt=0;
       document.getElementById('formArea').style.display='none';
       document.getElementById('periodInfo').style.display='none';
+      const debtBox=document.getElementById('debtBox'); if(debtBox) debtBox.classList.remove('show');
+      const debtCb=document.getElementById('payIncludeDebt'); if(debtCb) debtCb.checked=true;
       document.getElementById('invSearch').value='';
       document.getElementById('noteInput').value='';
       const da=document.getElementById('dueAfterInput'); if(da) da.value='';
-      const dh=document.getElementById('dueAfterHint'); if(dh) dh.textContent='Otomatis +1 bulan dari jatuh tempo sekarang. Ubah bila perlu.';
+      markDueDurationChip('1m');
+      const dh=document.getElementById('dueAfterHint'); if(dh) dh.textContent='Otomatis +1 bulan dari jatuh tempo sekarang. Pilih durasi cepat atau ubah tanggal.';
       const wa=document.getElementById('sendWa'), em=document.getElementById('sendEmail');
       if(wa)wa.checked=false; if(em)em.checked=false;
       const nh=document.getElementById('notifHint'); if(nh)nh.textContent='';
